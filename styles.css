@@ -299,3 +299,9 @@ tr.done .check { background: var(--accent); border-color: var(--accent); color: 
 .anim-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px 10px 14px; border-top: 1px solid var(--line); }
 .anim-label { flex: 1; font-weight: 650; font-size: 14px; }
 .anim-toggle { border: 0; background: var(--surface-2); border-radius: 8px; height: 30px; padding: 0 12px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.photo-stage { position: relative; aspect-ratio: 3 / 2; background: #111; cursor: pointer; }
+.photo-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity .45s ease; }
+.photo-stage img.on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .photo-stage img { transition: none; } }
+.photo-credit { font-size: 11px; color: var(--text-3); padding: 0 14px 10px; margin-top: -4px; }
+.photo-credit a { color: inherit; }

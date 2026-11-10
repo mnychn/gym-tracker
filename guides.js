@@ -1,6 +1,6 @@
 // How-to guides per exercise. Keys are lowercase exercise names; `aliases` map other names onto them.
 // `assumed` marks entries where the logged name was ambiguous — the guide says what it assumes.
-// `q` overrides the YouTube search query (default: "<name> proper form").
+// Animations for each key live in anim.js.
 window.GUIDES = {
   'seated band row': {
     zh: '坐姿彈力帶划船', muscles: ['Mid back', 'Lats', 'Rear delts'],
@@ -14,7 +14,6 @@ window.GUIDES = {
     mistakes: ['Leaning back to finish the rep', 'Shrugging the shoulders up'],
   },
   'single-arm kb row': {
-    q: 'single arm kettlebell row form',
     zh: '壺鈴單手划船', muscles: ['Mid back', 'Lats'],
     steps: [
       'Put one hand and the same-side knee on a bench; other foot on the floor.',
@@ -37,7 +36,6 @@ window.GUIDES = {
     mistakes: ['Standing up taller with every rep', 'Using momentum from the legs'],
   },
   'butterfly': {
-    q: 'pec deck butterfly chest fly proper form',
     zh: '蝴蝶夾胸', muscles: ['Chest', 'Front delts'],
     assumed: 'Chest fly ("butterfly"). Do it on a pec-deck machine, with dumbbells lying on a bench, or with a band.',
     steps: [
@@ -105,7 +103,6 @@ window.GUIDES = {
     mistakes: ['Heels lifting', 'Knees caving inward', 'Rounding forward at the bottom'],
   },
   'squat': {
-    q: 'dumbbell squat proper form',
     zh: '深蹲', muscles: ['Quads', 'Glutes', 'Core'],
     assumed: 'Dumbbell squat. Hold one dumbbell at your chest (goblet) or one in each hand at your sides.',
     steps: [
@@ -130,7 +127,6 @@ window.GUIDES = {
   },
   'rdl': { alias: 'db romanian deadlift' },
   'srdl': {
-    q: 'single leg romanian deadlift dumbbell form',
     zh: '單腿羅馬尼亞硬舉', muscles: ['Hamstrings', 'Glutes', 'Balance'],
     assumed: 'Single-leg Romanian deadlift.',
     steps: [
@@ -143,7 +139,6 @@ window.GUIDES = {
     mistakes: ['Opening the hip toward the ceiling', 'Rounding the back'],
   },
   'french press': {
-    q: 'lying dumbbell french press triceps form',
     zh: '法式彎舉', muscles: ['Triceps'],
     steps: [
       'Lie on a bench holding a dumbbell (or one in each hand) above your forehead, arms straight, elbows pointing at the ceiling.',
@@ -188,7 +183,6 @@ window.GUIDES = {
     mistakes: ['Swinging the body', 'Shrugging the weight up with the traps'],
   },
   'rear delt fly': {
-    q: 'thumbs up rear delt fly dumbbell form',
     zh: '拇指朝天水平飛鳥', muscles: ['Rear delts', 'Upper back'],
     steps: [
       'Hinge forward about 45° with a dumbbell in each hand, arms hanging, thumbs pointing up (palms facing each other).',
@@ -200,7 +194,6 @@ window.GUIDES = {
     mistakes: ['Jerking the weights up with your back', 'Turning it into a row by bending the elbows a lot'],
   },
   'overhead': {
-    q: 'overhead dumbbell triceps extension proper form',
     zh: '過頭三頭伸展', muscles: ['Triceps'],
     assumed: 'Overhead dumbbell triceps extension. If you meant an overhead press, see DB Shoulder Press.',
     steps: [
@@ -213,7 +206,6 @@ window.GUIDES = {
     mistakes: ['Elbows flaring wide', 'Arching the lower back'],
   },
   'step down': {
-    q: 'step down exercise knee proper form',
     zh: '下台階', muscles: ['Quads', 'Glutes', 'Knee control'],
     steps: [
       'Stand on a step or low box on one leg; the other foot hangs off the edge.',
@@ -225,7 +217,6 @@ window.GUIDES = {
     mistakes: ['Knee caving inward', 'Dropping fast onto the bottom foot'],
   },
   'db roll': {
-    q: 'dumbbell ab rollout',
     zh: '啞鈴滾輪', muscles: ['Abs', 'Core stabilisers'],
     assumed: 'Dumbbell ab rollout (a round dumbbell used like an ab wheel).',
     steps: [
@@ -272,7 +263,6 @@ window.GUIDES = {
   },
   'hiit': {
     zh: 'HIIT 間歇訓練', muscles: ['Heart & lungs', 'Full body'],
-    q: '一米六 HIIT 15分鐘',
     steps: [
       'Warm up for 3–5 minutes: dynamic moves to raise your heart rate.',
       'Work hard for 20–40 seconds, giving it everything.',
@@ -284,7 +274,6 @@ window.GUIDES = {
   },
   'walk': {
     zh: '健走', muscles: ['Heart & lungs', 'Legs'],
-    q: 'brisk walking technique',
     steps: [
       'Walk at a brisk pace where you can talk, but not sing.',
       'Stand tall, swing your arms naturally and roll from heel to toe.',

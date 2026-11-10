@@ -1,7 +1,7 @@
 // Bump VERSION whenever you change any app file so devices pick up the update.
-const VERSION = 'gymlog-v4';
+const VERSION = 'gymlog-v5';
 const ASSETS = [
-  './', './index.html', './styles.css', './app.js', './seed.js', './guides.js', './manifest.webmanifest',
+  './', './index.html', './styles.css', './app.js', './seed.js', './guides.js', './anim.js', './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
   './icons/maskable-512.png', './icons/apple-touch-icon.png'
 ];

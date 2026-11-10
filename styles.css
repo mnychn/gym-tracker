@@ -95,6 +95,8 @@ svg { display: block; }
   height: 40px; padding: 0 16px; border-radius: 11px; border: 1px solid var(--line);
   background: var(--surface); font-weight: 600; font-size: 15px; white-space: nowrap;
 }
+a.btn { text-decoration: none; color: var(--text); }
+a.btn.soft { color: var(--accent); }
 .btn:active { transform: scale(.98); }
 .btn:disabled, .icon-btn:disabled { opacity: .35; cursor: default; transform: none; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
@@ -155,6 +157,16 @@ label.lbl { display: block; font-size: 12px; font-weight: 600; color: var(--text
 .ex-head { display: flex; align-items: flex-start; gap: 8px; padding: 12px 8px 6px 14px; }
 .ex-name { font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
 .ex-meta { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+button.ex-name { border: 0; background: none; padding: 0; text-align: left; }
+.guide-link { cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.hero li { cursor: pointer; }
+.video { position: relative; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #000; }
+.video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.guide-list { margin: 0; padding-left: 22px; line-height: 1.5; }
+.guide-list li + li { margin-top: 6px; }
+ol.guide-list li::marker { color: var(--accent); font-weight: 700; }
+.guide-note { margin: 14px 2px 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
 .ex.complete .ex-name::after { content: " ✓"; color: var(--accent); }
 .sets { width: 100%; border-collapse: collapse; }
 .sets th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); text-align: center; padding: 4px 4px 6px; }

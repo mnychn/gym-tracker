@@ -22,6 +22,8 @@ const ICON = {
   trash: '<svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/></svg>',
   chev: '<svg viewBox="0 0 24 24"><path d="M9 5.5l6.5 6.5L9 18.5"/></svg>',
   close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  info: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.6v.01"/></svg>',
+  yt: '<svg viewBox="0 0 24 24"><rect x="2.5" y="5.5" width="19" height="13" rx="3.5"/><path d="M10 9.3v5.4l4.6-2.7z" fill="currentColor"/></svg>',
 };
 
 function fmtClock(ms) {
@@ -77,6 +79,7 @@ function defaults() {
     settings: { unit: 'kg', defaultRest: 60, sound: true, vibrate: true, keepAwake: true, theme: 'auto' },
     routine: clone(seed.routine),
     sessions: clone(seed.sessions),
+    videos: {}, // normalized exercise name -> user's own video URL
     active: null,
     rest: null,
   };
@@ -269,6 +272,64 @@ function completeSetTimer(withAlert) {
   renderView();
 }
 
+// ---------------------------------------------------------------- exercise guides & videos
+function getGuide(name) {
+  const G = window.GUIDES || {}, A = window.GUIDE_ALIASES || {};
+  let k = norm(name);
+  if (!G[k] && A[k]) k = A[k];
+  if (!G[k]) k = norm(k.replace(/\s*\(.*\)\s*$/, '')); // "Push-up (knee)" -> "push-up"
+  if (!G[k] && A[k]) k = A[k];
+  let g = G[k];
+  if (g && g.alias) g = G[g.alias];
+  return g || null;
+}
+function ytId(url) {
+  const m = String(url || '').match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/);
+  return m ? m[1] : null;
+}
+const safeUrl = (u) => (/^https?:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '');
+function openGuide(name) {
+  const g = getGuide(name);
+  const mine = (db.videos || {})[norm(name)] || '';
+  const id = ytId(mine);
+  const q = (g && g.q) || `${name} proper form`;
+  const search = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+  const list = (arr, tag) => (arr && arr.length ? `<${tag} class="guide-list">${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</${tag}>` : '');
+  const video = id
+    ? `<div class="video"><iframe src="https://www.youtube-nocookie.com/embed/${id}?playsinline=1&rel=0" title="${esc(name)} video" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`
+    : mine ? `<a class="btn soft big" href="${esc(safeUrl(mine))}" target="_blank" rel="noopener">${ICON.yt} Open your video</a>` : '';
+  openModal(`
+    <div class="row"><div class="grow"><h3>${esc(name)}</h3>${g && g.zh ? `<div class="small muted">${esc(g.zh)}</div>` : ''}</div>
+      <button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
+    ${g ? `<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:10px">${g.muscles.map((m) => `<span class="pill accent">${esc(m)}</span>`).join('')}</div>` : ''}
+    <div class="stack" style="margin-top:14px">
+      ${video}
+      <a class="btn big ${video ? '' : 'soft'}" href="${search}" target="_blank" rel="noopener">${ICON.yt} ${id || mine ? 'Find other videos' : 'Watch form videos on YouTube'}</a>
+    </div>
+    ${g ? `
+      ${g.assumed ? `<p class="small muted guide-note">${esc(g.assumed)}</p>` : ''}
+      <div class="section-title">How to do it</div>${list(g.steps, 'ol')}
+      <div class="section-title">Form cues</div>${list(g.cues, 'ul')}
+      <div class="section-title">Common mistakes</div>${list(g.mistakes, 'ul')}`
+    : '<p class="muted" style="margin-top:14px">No written guide for this exercise yet. Use the YouTube button above, and save a video you like below.</p>'}
+    <div class="section-title">Your video</div>
+    <div class="small muted" style="margin:-2px 2px 8px">Paste a YouTube link (or any video URL) to keep it here for next time.</div>
+    <div class="row"><input class="field grow" id="m-video" value="${esc(mine)}" placeholder="https://youtu.be/…" inputmode="url" autocomplete="off">
+      <button class="btn primary" data-act="m:saveVideo">Save</button></div>
+    ${mine ? '<button class="btn sm ghost danger" style="margin-top:8px" data-act="m:clearVideo">Remove video</button>' : ''}`,
+  {
+    close: closeModal,
+    saveVideo: () => {
+      const v = $('#m-video').value.trim();
+      if (v && !safeUrl(v)) { toast('Enter a full link starting with https://'); return; }
+      db.videos = db.videos || {};
+      if (v) db.videos[norm(name)] = v; else delete db.videos[norm(name)];
+      save(); toast(v ? 'Video saved' : 'Video removed'); openGuide(name);
+    },
+    clearVideo: () => { delete db.videos[norm(name)]; save(); toast('Video removed'); openGuide(name); },
+  });
+}
+
 // ---------------------------------------------------------------- views
 const views = {};
 
@@ -288,7 +349,7 @@ function idleView() {
       <div class="eyebrow">Up next</div>
       <h2>${esc(nd.name)}</h2>
       <div class="small muted">${last ? `Last done ${fmtDate(last.date)} · ${relDays(last.date)}` : 'Not done yet'}</div>
-      <ul>${nd.exercises.map((x) => `<li><span>${esc(x.name)}</span><span class="num">${summarize(Array.from({ length: +x.sets || 1 }, () => ({ w: x.weight, r: x.reps })), x.timed)}</span></li>`).join('')}</ul>
+      <ul>${nd.exercises.map((x) => `<li data-act="guide" data-name="${esc(x.name)}"><span class="guide-link">${esc(x.name)}</span><span class="num">${summarize(Array.from({ length: +x.sets || 1 }, () => ({ w: x.weight, r: x.reps })), x.timed)}</span></li>`).join('')}</ul>
       <button class="btn primary big" data-act="start" data-day="${nd.id}">Start workout</button>
     </section>` : `<div class="card empty">No routine yet. Add training days in <b>Routine</b>.</div>`;
 
@@ -361,8 +422,9 @@ function exCard(e, ei) {
       <td>${btn}</td></tr>`;
   }).join('');
   return `<section class="card ex ${allDone ? 'complete' : ''}" data-ei="${ei}">
-    <div class="ex-head"><div class="grow"><div class="ex-name">${esc(e.name)}</div>
+    <div class="ex-head"><div class="grow"><button class="ex-name guide-link" data-act="guide" data-name="${esc(e.name)}">${esc(e.name)}</button>
       <div class="ex-meta">${prev ? `Last: ${summarize(prev.entry.sets, e.timed)} <span class="faint">(${shortDate(prev.session.date)})</span>` : 'First time'}</div></div>
+      <button class="icon-btn" data-act="guide" data-name="${esc(e.name)}" aria-label="How to do ${esc(e.name)}">${ICON.info}</button>
       <button class="icon-btn" data-act="ex-menu" aria-label="Exercise options">${ICON.more}</button></div>
     ${e.notes ? `<div class="ex-notes">${esc(e.notes)}</div>` : ''}
     <table class="sets"><thead><tr><th>Set</th><th>${unit()}</th><th>${e.timed ? 'Sec' : 'Reps'}</th><th></th></tr></thead><tbody>${rows}</tbody></table>
@@ -553,6 +615,7 @@ function exEditor(x, di, xi, n) {
   return `<div class="ex-edit">
     <div class="row"><input class="field grow" ${b('name')} value="${esc(x.name)}" list="ex-names" placeholder="Exercise name" aria-label="Exercise name">
       <div class="tools">
+        <button class="icon-btn" data-act="guide" data-name="${esc(x.name)}" aria-label="How to do it">${ICON.info}</button>
         <button class="icon-btn" data-act="rx-move" data-di="${di}" data-xi="${xi}" data-d="-1" ${xi === 0 ? 'disabled' : ''} aria-label="Move up">${ICON.up}</button>
         <button class="icon-btn" data-act="rx-move" data-di="${di}" data-xi="${xi}" data-d="1" ${xi === n - 1 ? 'disabled' : ''} aria-label="Move down">${ICON.down}</button>
         <button class="icon-btn" data-act="rx-del" data-di="${di}" data-xi="${xi}" aria-label="Delete exercise">${ICON.trash}</button>
@@ -800,6 +863,13 @@ document.addEventListener('click', async (ev) => {
       db.rest.fired = false; lastCue = null; save(); updateRest(); break;
     case 'rest-skip': db.rest = null; lastCue = null; save(); renderRest(); break;
     case 'ex-menu': exMenu(ei); break;
+    case 'guide': {
+      // in the routine editor, use the name as currently typed
+      const inp = t.closest('.ex-edit') && t.closest('.ex-edit').querySelector('[data-f="name"]');
+      const name = (inp ? inp.value : t.dataset.name).trim();
+      if (name) openGuide(name); else toast('Name the exercise first');
+      break;
+    }
     case 'add-ex': addExerciseModal(); break;
 
     case 'edit-session': openSessionEditor(db.sessions.find((s) => s.id === t.dataset.id), false); break;
@@ -1033,7 +1103,7 @@ function importData(file) {
       close: closeModal,
       merge: () => {
         db.sessions = db.sessions.concat(d.sessions.filter((s) => !db.sessions.some((x) => x.id === s.id)));
-        db.routine = d.routine; save(); closeModal(); toast(`Imported ${fresh} workouts`); render();
+        db.routine = d.routine; db.videos = { ...(d.videos || {}), ...(db.videos || {}) }; save(); closeModal(); toast(`Imported ${fresh} workouts`); render();
       },
       replace: () => {
         const base = defaults();

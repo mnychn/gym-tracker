@@ -390,5 +390,9 @@ function mount(el, key) {
   return { stop: () => cancelAnimationFrame(raf) };
 }
 
-window.ExAnim = { has: (k) => !!ANIMS[k], mount, _ANIMS: ANIMS, _solve: solve, _draw: draw, _poseAt: poseAt, _timeline: timeline };
+function still(key) {
+  const def = ANIMS[key];
+  return `<svg viewBox="0 -10 240 190" aria-hidden="true">${draw(def, def.frames[Math.min(1, def.frames.length - 1)])}</svg>`;
+}
+window.ExAnim = { has: (k) => !!ANIMS[k], mount, still, _ANIMS: ANIMS, _solve: solve, _draw: draw, _poseAt: poseAt, _timeline: timeline };
 })();

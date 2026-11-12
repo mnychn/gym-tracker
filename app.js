@@ -284,13 +284,13 @@ function openGuide(name) {
   const key = guideKey(name);
   const g = key ? window.GUIDES[key] : null;
   const list = (arr, tag) => (arr && arr.length ? `<${tag} class="guide-list">${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</${tag}>` : '');
-  const hasPhoto = !!(g && g.photo);
-  const hasAnim = hasPhoto || (key && window.ExAnim && window.ExAnim.has(key));
+  const hasImg = !!(g && g.img && g.img.length);
+  const hasAnim = hasImg || (key && window.ExAnim && window.ExAnim.has(key));
   openModal(`
     <div class="row"><div class="grow"><h3>${esc(name)}</h3>${g && g.zh ? `<div class="small muted">${esc(g.zh)}</div>` : ''}</div>
       <button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
     ${g ? `<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:10px">${g.muscles.map((m) => `<span class="pill accent">${esc(m)}</span>`).join('')}</div>` : ''}
-    ${hasAnim ? `<div class="anim${hasPhoto ? ' photo' : ''}" id="m-anim" style="margin-top:14px"></div>` : ''}
+    ${hasAnim ? '<div class="anim" id="m-anim" style="margin-top:14px"></div>' : ''}
     ${g ? `
       ${g.assumed ? `<p class="small muted guide-note">${esc(g.assumed)}</p>` : ''}
       <div class="section-title">How to do it</div>${list(g.steps, 'ol')}
@@ -298,20 +298,21 @@ function openGuide(name) {
       <div class="section-title">Common mistakes</div>${list(g.mistakes, 'ul')}`
     : '<p class="muted" style="margin-top:14px">No guide for this exercise yet. Add your own cues in the exercise notes (Routine tab).</p>'}`,
   { close: closeModal });
-  if (hasPhoto) mountPhotos($('#m-anim'), g);
+  if (hasImg) mountImages($('#m-anim'), g);
   else if (hasAnim) window.ExAnim.mount($('#m-anim'), key);
 }
 
-/** Start/end photos from free-exercise-db, cross-fading like a two-frame flip-book. */
-function mountPhotos(el, g) {
-  const frames = g.photos || [0, 1];
-  const name = g.photo.replace(/_/g, ' ');
-  el.innerHTML = `<div class="photo-stage">${frames.map((f, i) =>
-    `<img src="photos/${encodeURIComponent(g.photo)}/${f}.jpg" alt="${esc(name)} — position ${i + 1}" class="${i ? '' : 'on'}" decoding="async">`).join('')}</div>
+const imgSrc = (f) => `exercise-img/${encodeURIComponent(f)}`;
+const REPDB_CREDIT = 'Exercise data by <a href="https://repdb.co" target="_blank" rel="noopener nofollow">RepDB (repdb.co)</a>';
+
+/** Big start/peak illustrations in the guide sheet, cross-fading like a two-frame flip-book. */
+function mountImages(el, g) {
+  const frames = g.img;
+  el.innerHTML = `<div class="photo-stage">${frames.map((f, i) => `<img src="${imgSrc(f)}" alt="position ${i + 1}" class="${i ? '' : 'on'}" decoding="async">`).join('')}</div>
     <div class="anim-bar"><span class="anim-label"></span>${frames.length > 1 ? '<button type="button" class="anim-toggle"></button>' : ''}</div>
-    <div class="photo-credit">Photo: ${esc(name)} · <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a> (Unlicense)</div>`;
+    <div class="photo-credit">${REPDB_CREDIT}</div>`;
   const imgs = [...el.querySelectorAll('img')], lab = el.querySelector('.anim-label'), btn = el.querySelector('.anim-toggle');
-  const labels = frames.length > 1 ? ['Start', 'Finish'] : ['Hold this position'];
+  const labels = frames.length > 1 ? ['Start', 'Peak'] : ['Position'];
   let i = 0, timer = 0;
   let playing = frames.length > 1 && !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const show = (n) => { i = n; imgs.forEach((im, k) => im.classList.toggle('on', k === i)); lab.textContent = labels[i]; };
@@ -322,9 +323,21 @@ function mountPhotos(el, g) {
   };
   const setBtn = () => { if (btn) btn.textContent = playing ? 'Pause' : 'Play'; };
   if (btn) btn.addEventListener('click', () => { playing = !playing; setBtn(); loop(); });
-  // tapping the photo while paused flips to the other position
+  // tapping the picture while paused flips to the other position
   el.querySelector('.photo-stage').addEventListener('click', () => { if (!playing && imgs.length > 1) show((i + 1) % imgs.length); });
   show(0); setBtn(); loop();
+}
+
+/** Inline exercise picture (tap = open the guide). Loops start <-> peak with CSS only, so many can run at once. */
+function thumb(name, size = 'md') {
+  const key = guideKey(name);
+  const g = key ? window.GUIDES[key] : null;
+  const open = `data-act="guide" data-name="${esc(name)}" aria-label="How to do ${esc(name)}"`;
+  if (g && g.img && g.img.length) {
+    return `<button type="button" class="thumb ${size}" ${open}><img src="${imgSrc(g.img[0])}" alt="" loading="lazy" decoding="async">${g.img[1] ? `<img class="b" src="${imgSrc(g.img[1])}" alt="" loading="lazy" decoding="async">` : ''}</button>`;
+  }
+  if (key && window.ExAnim && window.ExAnim.has(key)) return `<button type="button" class="thumb ${size} anim" ${open}>${window.ExAnim.still(key)}</button>`;
+  return '';
 }
 
 // ---------------------------------------------------------------- views
@@ -346,7 +359,7 @@ function idleView() {
       <div class="eyebrow">Up next</div>
       <h2>${esc(nd.name)}</h2>
       <div class="small muted">${last ? `Last done ${fmtDate(last.date)} · ${relDays(last.date)}` : 'Not done yet'}</div>
-      <ul>${nd.exercises.map((x) => `<li data-act="guide" data-name="${esc(x.name)}"><span class="guide-link">${esc(x.name)}</span><span class="num">${summarize(Array.from({ length: +x.sets || 1 }, () => ({ w: x.weight, r: x.reps })), x.timed)}</span></li>`).join('')}</ul>
+      <ul>${nd.exercises.map((x) => `<li data-act="guide" data-name="${esc(x.name)}">${thumb(x.name, 'sm')}<span class="guide-link">${esc(x.name)}</span><span class="num">${summarize(Array.from({ length: +x.sets || 1 }, () => ({ w: x.weight, r: x.reps })), x.timed)}</span></li>`).join('')}</ul>
       <button class="btn primary big" data-act="start" data-day="${nd.id}">Start workout</button>
     </section>` : `<div class="card empty">No routine yet. Add training days in <b>Routine</b>.</div>`;
 
@@ -419,7 +432,7 @@ function exCard(e, ei) {
       <td>${btn}</td></tr>`;
   }).join('');
   return `<section class="card ex ${allDone ? 'complete' : ''}" data-ei="${ei}">
-    <div class="ex-head"><div class="grow"><button class="ex-name guide-link" data-act="guide" data-name="${esc(e.name)}">${esc(e.name)}</button>
+    <div class="ex-head">${thumb(e.name, 'lg')}<div class="grow"><button class="ex-name guide-link" data-act="guide" data-name="${esc(e.name)}">${esc(e.name)}</button>
       <div class="ex-meta">${prev ? `Last: ${summarize(prev.entry.sets, e.timed)} <span class="faint">(${shortDate(prev.session.date)})</span>` : 'First time'}</div></div>
       <button class="icon-btn" data-act="guide" data-name="${esc(e.name)}" aria-label="How to do ${esc(e.name)}">${ICON.info}</button>
       <button class="icon-btn" data-act="ex-menu" aria-label="Exercise options">${ICON.more}</button></div>
@@ -610,7 +623,7 @@ views.routine = () => {
 function exEditor(x, di, xi, n) {
   const b = (f) => `data-bind="rx" data-di="${di}" data-xi="${xi}" data-f="${f}"`;
   return `<div class="ex-edit">
-    <div class="row"><input class="field grow" ${b('name')} value="${esc(x.name)}" list="ex-names" placeholder="Exercise name" aria-label="Exercise name">
+    <div class="row">${thumb(x.name, 'sm')}<input class="field grow" ${b('name')} value="${esc(x.name)}" list="ex-names" placeholder="Exercise name" aria-label="Exercise name">
       <div class="tools">
         <button class="icon-btn" data-act="guide" data-name="${esc(x.name)}" aria-label="How to do it">${ICON.info}</button>
         <button class="icon-btn" data-act="rx-move" data-di="${di}" data-xi="${xi}" data-d="-1" ${xi === 0 ? 'disabled' : ''} aria-label="Move up">${ICON.up}</button>
@@ -657,6 +670,8 @@ views.settings = () => {
         <label class="btn sm" style="position:relative;overflow:hidden">Import<input type="file" accept="application/json,.json" data-bind="import" style="position:absolute;inset:0;opacity:0"></label></div>
       <div class="setting"><div class="grow"><div>Reset everything</div><div class="small muted">Erase history and restore the original routine</div></div><button class="btn sm danger" data-act="reset">Reset</button></div>
     </div>
+    <div class="section-title">Credits</div>
+    <div class="card small muted" style="line-height:1.6">${REPDB_CREDIT}. Illustrations from the RepDB free tier.</div>
     <div class="section-title">Install as an app</div>
     <div class="card small muted" style="line-height:1.6">
       ${standalone ? '<b style="color:var(--accent)">✓ Running as an installed app.</b><br>' : ''}

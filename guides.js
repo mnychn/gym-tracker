@@ -1,10 +1,10 @@
 // How-to guides per exercise. Keys are lowercase exercise names; `aliases` map other names onto them.
 // `assumed` marks entries where the logged name was ambiguous — the guide says what it assumes.
-// `photo` = folder in photos/ (from free-exercise-db, Unlicense); `photos` = which frames to show (default [0, 1]).
-// Exercises without a photo fall back to the stick-figure animation in anim.js.
+// `img` = illustrations in exercise-img/ (start, peak), from the RepDB free tier — https://repdb.co (attribution required).
+// Exercises without images fall back to the stick-figure animation in anim.js.
 window.GUIDES = {
   'seated band row': {
-    photo: 'Seated_Cable_Rows',
+    img: ['seated-cable-row-start.webp', 'seated-cable-row-peak.webp'],
     zh: '坐姿彈力帶划船', muscles: ['Mid back', 'Lats', 'Rear delts'],
     steps: [
       'Sit with legs straight, band looped around the soles of your feet, a handle in each hand.',
@@ -16,7 +16,7 @@ window.GUIDES = {
     mistakes: ['Leaning back to finish the rep', 'Shrugging the shoulders up'],
   },
   'single-arm kb row': {
-    photo: 'One-Arm_Dumbbell_Row',
+    img: ['single-arm-db-row-start.webp', 'single-arm-db-row-peak.webp'],
     zh: '壺鈴單手划船', muscles: ['Mid back', 'Lats'],
     steps: [
       'Put one hand and the same-side knee on a bench; other foot on the floor.',
@@ -28,7 +28,7 @@ window.GUIDES = {
     mistakes: ['Twisting the torso to heave the weight', 'Rounding the lower back'],
   },
   'bent-over db row': {
-    photo: 'Bent_Over_Two-Dumbbell_Row',
+    img: ['bent-over-db-row-start.webp', 'bent-over-db-row-peak.webp'],
     zh: '啞鈴雙手俯身划船', muscles: ['Mid back', 'Lats', 'Rear delts'],
     steps: [
       'Hold a dumbbell in each hand, feet hip-width apart, knees slightly bent.',
@@ -40,7 +40,7 @@ window.GUIDES = {
     mistakes: ['Standing up taller with every rep', 'Using momentum from the legs'],
   },
   'butterfly': {
-    photo: 'Butterfly',
+    img: ['pec-deck-start.webp', 'pec-deck-peak.webp'],
     zh: '蝴蝶夾胸', muscles: ['Chest', 'Front delts'],
     assumed: 'Chest fly ("butterfly"). Do it on a pec-deck machine, with dumbbells lying on a bench, or with a band.',
     steps: [
@@ -53,7 +53,7 @@ window.GUIDES = {
     mistakes: ['Going so deep the shoulders hurt', 'Bending and straightening the elbows (turns it into a press)'],
   },
   'db pullover': {
-    photo: 'Straight-Arm_Dumbbell_Pullover',
+    img: ['db-pullover-start.webp', 'db-pullover-peak.webp'],
     zh: '啞鈴仰臥拉舉', muscles: ['Lats', 'Chest', 'Triceps (long head)'],
     steps: [
       'Lie on a bench and hold one dumbbell with both hands over your chest, arms nearly straight.',
@@ -65,7 +65,7 @@ window.GUIDES = {
     mistakes: ['Bending the elbows a lot (turns it into a triceps exercise)', 'Lowering too far and straining the shoulders'],
   },
   'plank': {
-    photo: 'Plank', photos: [1],
+    img: ['plank-main.webp'],
     zh: '肘撐棒式', muscles: ['Abs', 'Core stabilisers', 'Glutes'],
     steps: [
       'Forearms on the floor, elbows directly under your shoulders.',
@@ -77,7 +77,7 @@ window.GUIDES = {
     mistakes: ['Hips sagging toward the floor', 'Hips piked up high', 'Holding your breath'],
   },
   'push-up': {
-    photo: 'Pushups',
+    img: ['push-up-start.webp', 'push-up-peak.webp'],
     zh: '伏地挺身', muscles: ['Chest', 'Shoulders', 'Triceps'],
     steps: [
       'Hands slightly wider than shoulders, body in a straight line (on knees for the easier version).',
@@ -89,7 +89,7 @@ window.GUIDES = {
     mistakes: ['Hips sagging', 'Partial reps — only going halfway down'],
   },
   'incline push-up': {
-    photo: 'Incline_Push-Up',
+    img: ['incline-push-ups-start.webp', 'incline-push-ups-peak.webp'],
     zh: '上斜伏地挺身', muscles: ['Chest', 'Shoulders', 'Triceps'],
     steps: [
       'Put your hands on a bench, box or sturdy table, slightly wider than your shoulders.',
@@ -101,7 +101,7 @@ window.GUIDES = {
     mistakes: ['Flaring the elbows straight out', 'Head poking forward'],
   },
   'goblet squat': {
-    photo: 'Goblet_Squat',
+    img: ['db-goblet-squat-start.webp', 'db-goblet-squat-peak.webp'],
     zh: '高腳杯深蹲', muscles: ['Quads', 'Glutes', 'Core'],
     steps: [
       'Feet shoulder-width apart, toes turned out slightly. Hold one dumbbell vertically at your chest.',
@@ -113,7 +113,7 @@ window.GUIDES = {
     mistakes: ['Heels lifting', 'Knees caving inward', 'Rounding forward at the bottom'],
   },
   'squat': {
-    photo: 'Dumbbell_Squat',
+    img: ['db-squat-start.webp', 'db-squat-peak.webp'],
     zh: '深蹲', muscles: ['Quads', 'Glutes', 'Core'],
     assumed: 'Dumbbell squat. Hold one dumbbell at your chest (goblet) or one in each hand at your sides.',
     steps: [
@@ -126,7 +126,7 @@ window.GUIDES = {
     mistakes: ['Knees caving in', 'Weight shifting onto the toes'],
   },
   'db romanian deadlift': {
-    photo: 'Stiff-Legged_Dumbbell_Deadlift',
+    img: ['dumbbell-romanian-deadlift-start.webp', 'dumbbell-romanian-deadlift-peak.webp'],
     zh: '雙手啞鈴硬舉', muscles: ['Hamstrings', 'Glutes', 'Lower back'],
     steps: [
       'Stand hip-width apart with a dumbbell in each hand in front of your thighs, knees slightly bent.',
@@ -139,7 +139,7 @@ window.GUIDES = {
   },
   'rdl': { alias: 'db romanian deadlift' },
   'srdl': {
-    photo: 'Kettlebell_One-Legged_Deadlift',
+    img: ['single-leg-romanian-deadlift-start.webp', 'single-leg-romanian-deadlift-peak.webp'],
     zh: '單腿羅馬尼亞硬舉', muscles: ['Hamstrings', 'Glutes', 'Balance'],
     assumed: 'Single-leg Romanian deadlift.',
     steps: [
@@ -152,7 +152,7 @@ window.GUIDES = {
     mistakes: ['Opening the hip toward the ceiling', 'Rounding the back'],
   },
   'french press': {
-    photo: 'Lying_Dumbbell_Tricep_Extension',
+    img: ['db-skull-crusher-start.webp', 'db-skull-crusher-peak.webp'],
     zh: '法式彎舉', muscles: ['Triceps'],
     steps: [
       'Lie on a bench holding a dumbbell (or one in each hand) above your forehead, arms straight, elbows pointing at the ceiling.',
@@ -164,7 +164,7 @@ window.GUIDES = {
     mistakes: ['Elbows drifting toward your feet (turns it into a press)', 'Going too heavy and losing control near your head'],
   },
   'bulgarian split squat': {
-    photo: 'Split_Squat_with_Dumbbells',
+    img: ['bulgarian-split-squat-start.webp', 'bulgarian-split-squat-peak.webp'],
     zh: '保加利亞分腿蹲', muscles: ['Quads', 'Glutes'],
     steps: [
       'Stand about a big step in front of a bench or chair and rest the top of your back foot on it.',
@@ -176,7 +176,7 @@ window.GUIDES = {
     mistakes: ['Standing too close to the bench, so the knee shoots far past the toes', 'Pushing off the back foot'],
   },
   'db shoulder press': {
-    photo: 'Dumbbell_Shoulder_Press',
+    img: ['seated-db-press-start.webp', 'seated-db-press-peak.webp'],
     zh: '啞鈴肩推', muscles: ['Front delts', 'Side delts', 'Triceps'],
     steps: [
       'Sit on a bench with back support, holding the dumbbells at shoulder height with palms facing forward.',
@@ -188,7 +188,7 @@ window.GUIDES = {
     mistakes: ['Over-arching the lower back', 'Cutting the range short at the bottom'],
   },
   'single-arm lateral raise': {
-    photo: 'One-Arm_Side_Laterals',
+    img: ['lateral-raise-start.webp', 'lateral-raise-peak.webp'],
     zh: '單手側平舉', muscles: ['Side delts'],
     steps: [
       'Stand tall with a dumbbell in one hand at your side; you can hold a post with the other hand for stability.',
@@ -200,7 +200,7 @@ window.GUIDES = {
     mistakes: ['Swinging the body', 'Shrugging the weight up with the traps'],
   },
   'rear delt fly': {
-    photo: 'Bent_Over_Dumbbell_Rear_Delt_Raise_With_Head_On_Bench',
+    img: ['dumbbell-reverse-fly-start.webp', 'dumbbell-reverse-fly-peak.webp'],
     zh: '拇指朝天水平飛鳥', muscles: ['Rear delts', 'Upper back'],
     steps: [
       'Hinge forward about 45° with a dumbbell in each hand, arms hanging, thumbs pointing up (palms facing each other).',
@@ -212,7 +212,7 @@ window.GUIDES = {
     mistakes: ['Jerking the weights up with your back', 'Turning it into a row by bending the elbows a lot'],
   },
   'overhead': {
-    photo: 'Standing_Dumbbell_Triceps_Extension',
+    img: ['overhead-tricep-extension-start.webp', 'overhead-tricep-extension-peak.webp'],
     zh: '過頭三頭伸展', muscles: ['Triceps'],
     assumed: 'Overhead dumbbell triceps extension. If you meant an overhead press, see DB Shoulder Press.',
     steps: [
@@ -236,7 +236,7 @@ window.GUIDES = {
     mistakes: ['Knee caving inward', 'Dropping fast onto the bottom foot'],
   },
   'db roll': {
-    photo: 'Ab_Roller',
+    img: ['ab-wheel-rollout-start.webp', 'ab-wheel-rollout-peak.webp'],
     zh: '啞鈴滾輪', muscles: ['Abs', 'Core stabilisers'],
     assumed: 'Dumbbell ab rollout (a round dumbbell used like an ab wheel).',
     steps: [
@@ -249,7 +249,7 @@ window.GUIDES = {
     mistakes: ['Lower back arching', 'Leading with the hips on the way back'],
   },
   'hip thrust': {
-    photo: 'Barbell_Hip_Thrust',
+    img: ['dumbbell-hip-thrust-start.webp', 'dumbbell-hip-thrust-peak.webp'],
     zh: '臀推', muscles: ['Glutes', 'Hamstrings'],
     steps: [
       'Sit on the floor with your upper back against a bench edge (just below the shoulder blades) and a weight on your hips.',
@@ -261,6 +261,7 @@ window.GUIDES = {
     mistakes: ['Hyperextending the lower back at the top', 'Feet too far forward (works the hamstrings instead)'],
   },
   'clam shell': {
+    img: ['banded-clamshell-start.webp', 'banded-clamshell-peak.webp'],
     zh: '蚌殼式', muscles: ['Glute medius', 'Hip stabilisers'],
     steps: [
       'Lie on your side with a band just above your knees, hips and knees bent about 45°, feet together.',
@@ -272,7 +273,7 @@ window.GUIDES = {
     mistakes: ['Rolling the pelvis backward to lift higher', 'Rushing the reps'],
   },
   'bicep curl': {
-    photo: 'Dumbbell_Bicep_Curl',
+    img: ['bicep-curl-start.webp', 'bicep-curl-peak.webp'],
     zh: '二頭彎舉', muscles: ['Biceps'],
     steps: [
       'Stand tall with a dumbbell in each hand, palms facing forward, elbows at your sides.',
@@ -284,6 +285,7 @@ window.GUIDES = {
     mistakes: ['Swinging with the hips', 'Elbows drifting forward'],
   },
   'hiit': {
+    img: ['jumping-jacks-start.webp', 'jumping-jacks-peak.webp'],
     zh: 'HIIT 間歇訓練', muscles: ['Heart & lungs', 'Full body'],
     steps: [
       'Warm up for 3–5 minutes: dynamic moves to raise your heart rate.',
@@ -295,6 +297,7 @@ window.GUIDES = {
     mistakes: ['Skipping the warm-up', 'Losing form when tired — slow down instead'],
   },
   'walk': {
+    img: ['walking-main.webp'],
     zh: '健走', muscles: ['Heart & lungs', 'Legs'],
     steps: [
       'Walk at a brisk pace where you can talk, but not sing.',

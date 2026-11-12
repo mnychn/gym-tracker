@@ -139,8 +139,9 @@ label.lbl { display: block; font-size: 12px; font-weight: 600; color: var(--text
 .hero .eyebrow { font-size: 12px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
 .hero h2 { margin: 4px 0 4px; font-size: 22px; letter-spacing: -.02em; }
 .hero ul { margin: 10px 0 16px; padding: 0; list-style: none; }
-.hero li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid color-mix(in srgb, var(--accent) 18%, transparent); font-size: 15px; }
+.hero li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid color-mix(in srgb, var(--accent) 18%, transparent); font-size: 15px; }
 .hero li span:last-child { color: var(--text-2); white-space: nowrap; }
+.hero li .guide-link { flex: 1; min-width: 0; }
 .day-card { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; }
 .day-card .title { font-weight: 650; }
 .day-card .sub { font-size: 13px; color: var(--text-2); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -305,3 +306,18 @@ tr.done .check { background: var(--accent); border-color: var(--accent); color: 
 @media (prefers-reduced-motion: reduce) { .photo-stage img { transition: none; } }
 .photo-credit { font-size: 11px; color: var(--text-3); padding: 0 14px 10px; margin-top: -4px; }
 .photo-credit a { color: inherit; }
+
+/* ---------- inline exercise pictures ---------- */
+.thumb { position: relative; flex: none; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: #dcefff; cursor: pointer; }
+.thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.thumb img.b { animation: thumb-flip 3.2s ease-in-out infinite; }
+@keyframes thumb-flip { 0%, 40% { opacity: 0; } 50%, 90% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .thumb img.b { animation: none; opacity: 0; } }
+.thumb.anim { background: var(--surface-2); border: 0; }
+.thumb.anim svg { width: 100%; height: 100%; }
+.thumb.lg { width: 92px; height: 92px; }
+.thumb.md { width: 64px; height: 64px; }
+.thumb.sm { width: 44px; height: 44px; border-radius: 9px; }
+.ex-head { align-items: center; padding-left: 10px; }
+.ex-edit .row > .thumb { align-self: center; }
+@media (min-width: 640px) { .thumb.lg { width: 112px; height: 112px; } }

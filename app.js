@@ -122,7 +122,7 @@ function save() {
 
 let db = load();
 save();
-const ui = { tab: 'train', openDays: new Set(), progressEx: null, metric: null, editing: null, modalActs: {}, chart: null, progressMode: 'ex', bodyMetric: 'smm' };
+const ui = { tab: 'train', openDays: new Set(), progressEx: null, metric: null, editing: null, modalActs: {}, chart: null, histMode: 'list', bodyMetric: 'smm' };
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
 // ---------------------------------------------------------------- feedback
@@ -313,6 +313,7 @@ function finishFlow() {
       }
       db.active = null; db.rest = null; save(); releaseWakeLock(); closeModal();
       toast(nSets ? (a.kind === 'pt' ? 'Saved as a PT session 💪' : 'Workout saved 💪') : 'Workout ended');
+      if (nSets) ui.histMode = 'list';
       go(nSets ? 'history' : 'train');
     },
   });
@@ -720,7 +721,7 @@ function scanModal(scan) {
       if (s.weight == null && s.smm == null) { toast('Enter at least weight or skeletal muscle'); return; }
       const i = db.scans.findIndex((x) => x.id === s.id);
       if (i >= 0) db.scans[i] = s; else db.scans.push(s);
-      save(); closeModal(); toast('Scan saved'); ui.tab = 'progress'; ui.progressMode = 'body'; render();
+      save(); closeModal(); toast('Scan saved'); ui.tab = 'body'; render();
     },
   });
 }
@@ -1246,7 +1247,7 @@ function exCard(e, ei) {
   </section>`;
 }
 
-views.history = () => {
+function historyList() {
   const list = sortedSessions();
   let html = '', month = '';
   list.forEach((s) => {
@@ -1266,7 +1267,7 @@ views.history = () => {
     title: '<h1>History</h1><button class="btn sm soft" data-act="quick-log" data-k="jog">+ Jog</button><button class="btn sm soft" data-act="log-past">+ Log past</button>',
     body: html || '<div class="card empty">No workouts logged yet.</div>',
   };
-};
+}
 
 function metricsFor(name) {
   const rows = [];
@@ -1285,13 +1286,15 @@ function metricsFor(name) {
   return rows;
 }
 
+// History tab: the workout log and per-exercise progress side by side
 const modeSeg = () => `<div class="seg full" role="tablist" style="margin-bottom:12px">
-  <button class="${ui.progressMode === 'ex' ? 'on' : ''}" data-act="progress-mode" data-m="ex">Exercises</button>
-  <button class="${ui.progressMode === 'body' ? 'on' : ''}" data-act="progress-mode" data-m="body">Body</button></div>`;
-views.progress = () => {
-  const v = ui.progressMode === 'body' ? bodyView() : exerciseProgress();
+  <button class="${ui.histMode !== 'progress' ? 'on' : ''}" data-act="hist-mode" data-m="list">Workouts</button>
+  <button class="${ui.histMode === 'progress' ? 'on' : ''}" data-act="hist-mode" data-m="progress">Progress</button></div>`;
+views.history = () => {
+  const v = ui.histMode === 'progress' ? exerciseProgress() : historyList();
   return { title: v.title, body: modeSeg() + v.body };
 };
+views.body = () => bodyView();
 
 // ---------------------------------------------------------------- body scan visuals
 // status: lean measures are fine at/above range; body fat is only fine inside it. Icon + label always ship with the colour.
@@ -1556,7 +1559,7 @@ function bodyMapViz(s) {
 
 function bodyView() {
   const sc = sortedScans();
-  const title = '<h1>Progress</h1><button class="btn sm soft" data-act="add-scan">+ Scan</button>';
+  const title = '<h1>Body</h1><button class="btn sm soft" data-act="add-scan">+ Scan</button>';
   const fuel = `<div class="card small muted" style="line-height:1.6"><b style="color:var(--text)">Daily fuel for muscle gain</b><br>
     About <b class="num" style="color:var(--text)">${Number(db.goals.kcal).toLocaleString()} kcal</b> and <b class="num" style="color:var(--text)">${db.goals.protein} g protein</b> a day, protein spread over 3–4 meals.
     Add ~200–300 kcal on long jog days. If your weight hasn’t gone up after 4 weeks, add 100–150 kcal. Change these in Settings.</div>`;
@@ -1598,7 +1601,7 @@ function bodyView() {
 
 function exerciseProgress() {
   const names = knownNames().filter((n) => db.sessions.some((s) => s.entries.some((e) => norm(e.name) === norm(n))));
-  if (!names.length) return { title: '<h1>Progress</h1>', body: '<div class="card empty">Log a workout to see progress.</div>' };
+  if (!names.length) return { title: '<h1>History</h1>', body: '<div class="card empty">Log a workout to see progress.</div>' };
   if (!ui.progressEx || !names.some((n) => norm(n) === norm(ui.progressEx))) ui.progressEx = names[0];
   const rows = metricsFor(ui.progressEx);
   const timed = rows.some((r) => r.timed);
@@ -1632,7 +1635,7 @@ function exerciseProgress() {
   const restGroup = rest.length ? `<optgroup label="Past exercises">${rest.map((n) => `<option ${norm(n) === norm(ui.progressEx) ? 'selected' : ''}>${esc(n)}</option>`).join('')}</optgroup>` : '';
 
   return {
-    title: '<h1>Progress</h1>',
+    title: '<h1>History</h1>',
     body: `<div class="stack">
       <select class="field" data-bind="progress-ex" aria-label="Exercise">${groups}${restGroup}</select>
       <div class="seg full" role="tablist">${metrics.map(([k, l]) => `<button class="${k === key ? 'on' : ''}" data-act="metric" data-k="${k}">${l}</button>`).join('')}</div>
@@ -1908,7 +1911,7 @@ function renderView() {
     b.classList.toggle('on', b.dataset.tab === ui.tab);
     b.classList.toggle('live', b.dataset.tab === 'train' && !!db.active);
   });
-  if (ui.tab === 'progress') bindChart();
+  if (ui.tab === 'body' || (ui.tab === 'history' && ui.histMode === 'progress')) bindChart();
   tick();
 }
 function render() { applyTheme(); renderView(); renderRest(); }
@@ -2043,11 +2046,11 @@ document.addEventListener('click', async (ev) => {
     case 'log-past': logPastModal(); break;
 
     case 'metric': ui.metric = t.dataset.k; renderView(); break;
-    case 'progress-mode': ui.progressMode = t.dataset.m; renderView(); break;
+    case 'hist-mode': ui.histMode = t.dataset.m; renderView(); window.scrollTo(0, 0); break;
     case 'body-metric': ui.bodyMetric = t.dataset.k; renderView(); break;
     case 'add-scan': scanModal(null); break;
     case 'edit-scan': scanModal(db.scans.find((s) => s.id === t.dataset.id)); break;
-    case 'go-body': ui.progressMode = 'body'; go('progress'); window.scrollTo(0, 0); break;
+    case 'go-body': go('body'); window.scrollTo(0, 0); break;
     case 'quick-log': quickLogModal(t.dataset.k); break;
     case 'watch-paste': pasteFromWatch(); break;
     case 'watch-setup': watchSetup(); break;

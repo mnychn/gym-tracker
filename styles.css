@@ -782,3 +782,13 @@ tr.done .check { background: var(--accent); }
 .dp-i .ring { border-style: solid; width: 12px; height: 12px; background: currentColor; box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 30%, transparent); }
 .quest .q-shelf-l { margin: 18px 18px 0; }
 .quest .q-actions { padding-top: 12px; }
+/* cute two-tone tab icons */
+.tabs svg .f { fill: currentColor; fill-opacity: .16; }
+.tabs svg .solid { fill: currentColor; stroke: none; }
+.tabs svg .sp { stroke-width: 1.6; opacity: 0; transition: opacity .2s; }
+.tabs svg .blush { stroke: #ff9f93; stroke-width: 2.6; opacity: 0; transition: opacity .2s; }
+.tabs button.on svg .f { fill-opacity: .32; }
+.tabs button.on svg .sp, .tabs button.on svg .blush { opacity: 1; }
+.tabs button.on svg { animation: tab-hop .35s cubic-bezier(.2,1.6,.4,1); }
+@keyframes tab-hop { 0% { transform: scale(.8); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .tabs button.on svg { animation: none; } }

@@ -870,3 +870,25 @@ tr.done .check { background: var(--accent); }
 .b-c { color: #34304d !important; }
 .stat .v { font-size: 22px; white-space: nowrap; }
 .zb-ax .mid { color: var(--ok-ink) !important; }
+/* ---- illustrations (art.js) in place of emoji ---- */
+svg.art { display: inline-block; flex: none; vertical-align: middle; }
+.il { display: inline-flex; align-items: center; gap: 8px; }
+.pill.ip { gap: 3px; padding: 2px 10px 2px 4px; }
+.sc-h.warn::before, .sc-h.good::before { content: none; }
+.sc-h { display: flex; align-items: center; gap: 6px; }
+.q-medal svg.art { width: 46px; height: 46px; }
+.q-medal.none { filter: none; }
+.shelf-m { line-height: 0; }
+.shelf-m.none { opacity: .8; }
+.road .runner { transform: translateX(-50%); margin-bottom: -6px; line-height: 0; }
+.road .flag.fin { line-height: 0; right: -8px; }
+.quest .slot.done svg.art { margin-right: 2px; }
+.dp-i svg.art { width: 24px; height: 24px; }
+.hello-hi { display: flex; align-items: center; gap: 4px; }
+.qa .qa-e { line-height: 0; margin-bottom: 8px; }
+.sp-emoji { line-height: 0; }
+.gs-sec .gs-h { display: inline-flex !important; align-items: center; gap: 6px; padding: 3px 12px 3px 5px !important; }
+.bub { width: 40px; height: 40px; }
+.b-next.il { gap: 6px; }
+.fuel-e { width: 46px; height: 46px; }
+.sp-sub svg.art { vertical-align: -4px; }

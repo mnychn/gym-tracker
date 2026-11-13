@@ -959,7 +959,8 @@ function weekStars(w, g) {
   const lift = Math.min(w.gym, liftMax), jog = Math.min(jh, Math.floor(w.jogMin / per + 1e-9));
   return { lift, jog, liftMax, jogMax: jh, per, total: lift + jog, max: liftMax + jh };
 }
-const MEDALS = { gold: ['🥇', 'Gold'], silver: ['🥈', 'Silver'], bronze: ['🥉', 'Bronze'] };
+const MEDALS = { gold: ['🥇', 'Gold'], silver: ['🥈', 'Silver'], bronze: ['🥉', 'Bronze'] }; // emoji only in plain-text toasts
+const medalArt = (m, size) => (m ? ART.medal(m, size) : ART.noMedal(size));
 const medalNeed = (st, m) => (m === 'gold' ? st.max : m === 'silver' ? Math.ceil((st.max * 2) / 3) : Math.ceil(st.max / 3));
 function medalOf(st) {
   return ['gold', 'silver', 'bronze'].find((m) => st.total >= medalNeed(st, m)) || null;
@@ -979,7 +980,7 @@ function liftBadges(w, g) {
   const n = Math.max(g.sessions, w.days.length);
   return `<div class="slots" role="img" aria-label="${w.gym} of ${g.sessions} lifting sessions done">${Array.from({ length: n }, (_, i) => {
     const k = w.days[i];
-    return k ? `<span class="slot done ${k}" title="${KINDS[k]}">⭐<b>${k === 'pt' ? 'PT' : 'Own'}</b></span>` : '<span class="slot" title="To do">☆</span>';
+    return k ? `<span class="slot done ${k}" title="${KINDS[k]}">${ART.star(20)}<b>${k === 'pt' ? 'PT' : 'Own'}</b></span>` : '<span class="slot" title="To do">☆</span>';
   }).join('')}</div>`;
 }
 /** Jogging as a road: the runner moves along, each hour is a star flag, the last one is the finish. */
@@ -988,8 +989,8 @@ function jogRoad(w, st) {
   const flags = Array.from({ length: st.jogMax }, (_, i) => (i + 1) * st.per);
   return `<div class="road" role="img" aria-label="${w.jogMin} of ${Math.round(goal)} minutes jogging">
       <span class="road-fill" style="width:${X(w.jogMin)}%"></span>
-      ${flags.map((m, i) => `<i class="flag ${w.jogMin >= m ? 'on' : ''} ${i === flags.length - 1 ? 'fin' : ''}" style="left:${X(m)}%">${i === flags.length - 1 ? '🏁' : '★'}</i>`).join('')}
-      <b class="runner" style="left:${X(w.jogMin)}%">🏃‍♀️</b>
+      ${flags.map((m, i) => `<i class="flag ${w.jogMin >= m ? 'on' : ''} ${i === flags.length - 1 ? 'fin' : ''}" style="left:${X(m)}%">${i === flags.length - 1 ? ART.flag(20) : '★'}</i>`).join('')}
+      <b class="runner" style="left:${X(w.jogMin)}%">${ART.jog(34)}</b>
     </div>
     <div class="jogscale">${flags.map((m) => `<span style="left:${X(m)}%">${m % 60 ? `${Math.round(m)}m` : `${m / 60}h`}</span>`).join('')}</div>`;
 }
@@ -997,19 +998,19 @@ function jogRoad(w, st) {
 function medalShelf(ws, g) {
   const weeks = [6, 5, 4, 3, 2, 1].map((i) => { const s = ws - i * 7 * 864e5, w = weekStats(s), st = weekStars(w, g); return { s, w, st, m: medalOf(st) }; });
   return `<div class="shelf">${weeks.map((x) => `<div class="shelf-c" title="Week of ${shortDate(x.s)}: ${x.w.gym} lifts, ${x.w.jogMin} min jog — ${x.st.total}/${x.st.max} stars">
-      <span class="shelf-m ${x.m ? '' : 'none'}">${x.m ? MEDALS[x.m][0] : '○'}</span>
+      <span class="shelf-m ${x.m ? '' : 'none'}">${medalArt(x.m, 34)}</span>
       <span class="shelf-n num">${x.st.total}★</span><span class="shelf-d">${shortDate(x.s)}</span></div>`).join('')}</div>`;
 }
 function questLine(st, w, daysLeft) {
   const m = medalOf(st);
-  if (m === 'gold') return 'All stars earned — gold week! 🎉';
+  if (m === 'gold') return 'All stars earned — gold week!';
   const next = m === 'silver' ? 'gold' : m === 'bronze' ? 'silver' : 'bronze';
   const need = medalNeed(st, next) - st.total;
   const liftLeft = st.liftMax - st.lift, jogLeftMin = Math.max(0, Math.round(st.jogMax * st.per - w.jogMin));
   const bits = [];
   if (liftLeft) bits.push(plural(liftLeft, 'lift'));
   if (jogLeftMin) bits.push(`${jogLeftMin} min jog`);
-  return `<b>${plural(need, 'star')}</b> to ${MEDALS[next][0]} ${MEDALS[next][1]} · gold needs ${bits.join(' + ')} in ${plural(daysLeft + 1, 'day')}`;
+  return `<b>${plural(need, 'star')}</b> to ${MEDALS[next][1]} · gold needs ${bits.join(' + ')} in ${plural(daysLeft + 1, 'day')}`;
 }
 /** Confetti burst for a newly earned star (skipped with reduced motion). */
 function celebrate(msg) {
@@ -1035,24 +1036,24 @@ function weekCard() {
   }
   return `<section class="card week quest"><div class="q-hero">
     <div class="row"><b class="grow">Weekly quest</b>
-      <span class="pill num" title="${q.stars} stars all-time">⭐ Lv ${q.level}</span>
-      <span class="pill num ${q.streak ? 'streak' : ''}" title="Gold weeks in a row">🔥 ${q.streak}</span></div>
+      <span class="pill num ip" title="${q.stars} stars all-time">${ART.star(18)} Lv ${q.level}</span>
+      <span class="pill num ip ${q.streak ? 'streak' : ''}" title="Gold weeks in a row">${ART.flame(18)} ${q.streak}</span></div>
     <div class="q-head">
-      <div class="q-medal ${m || 'none'}" aria-hidden="true">${m ? MEDALS[m][0] : '🎯'}</div>
+      <div class="q-medal ${m || 'none'}" aria-hidden="true">${medalArt(m, 46)}</div>
       <div class="grow"><div class="q-score num"><b>${st.total}</b> / ${st.max} ★</div>
         <div class="small muted">${questLine(st, w, daysLeft)}</div></div>
     </div>
     <div class="q-lv" title="${q.toNext} stars to level ${q.level + 1}"><span style="width:${q.lvPct}%"></span></div>
-    <div class="q-lvtxt">${plural(q.toNext, 'star')} to level ${q.level + 1}${q.streak ? ` · ${plural(q.streak, 'gold week')} in a row` : ' · win gold to start a 🔥 streak'}</div>
+    <div class="q-lvtxt">${plural(q.toNext, 'star')} to level ${q.level + 1}${q.streak ? ` · ${plural(q.streak, 'gold week')} in a row` : ' · win gold to start a streak'}</div>
     </div>
-    <div class="q-tiles"><div class="goal tile-lav"><div class="row"><span class="grow">🏋️ Weight lifting${w.classes ? ` <span class="pill">+${plural(w.classes, 'class')}</span>` : ''}</span><span class="num"><b>${w.gym}</b> / ${g.sessions}</span></div>
+    <div class="q-tiles"><div class="goal tile-lav"><div class="row"><span class="grow il">${ART.lift(30)}Weight lifting${w.classes ? ` <span class="pill">+${plural(w.classes, 'class')}</span>` : ''}</span><span class="num"><b>${w.gym}</b> / ${g.sessions}</span></div>
       ${liftBadges(w, g)}</div>
-    <div class="goal tile-peach"><div class="row"><span class="grow">🏃‍♀️ Jogging</span><span class="num"><b>${w.jogMin}</b> / ${g.jogMin} min</span></div>
+    <div class="goal tile-peach"><div class="row"><span class="grow il">${ART.jog(30)}Jogging</span><span class="num"><b>${w.jogMin}</b> / ${g.jogMin} min</span></div>
       ${jogRoad(w, st)}</div></div>
     <div class="row q-actions" style="flex-wrap:wrap">
       <button class="btn sm soft" data-act="quick-log" data-k="jog">+ Jog</button>
       <button class="btn sm soft" data-act="quick-log" data-k="class">+ Class</button>
-      <button class="btn sm soft" data-act="watch-paste">⌚ From Watch</button></div>
+      <button class="btn sm soft" data-act="watch-paste">${ART.watch(20)} From Watch</button></div>
     <div class="lbl q-shelf-l">Medal shelf <span class="faint">· last 6 weeks</span></div>
     ${medalShelf(ws, g)}
   </section>`;
@@ -1065,10 +1066,10 @@ function questSnap() {
   return { ws, w, st, m: medalOf(st), lv: q.level, streak: q.streak };
 }
 const POPS = {
-  lift: [['💪', 'Beast mode!'], ['🦾', 'Stronger than yesterday'], ['🔥', 'On fire!'], ['🚀', 'Gains incoming'], ['🐻', 'Strong like a bear'], ['🏋️', 'Lift-off!']],
-  pt: [['🤝', 'Great PT session!'], ['💪', 'Coach-approved!'], ['🔥', 'PT crushed it — and so did you']],
-  jog: [['🏃‍♀️', 'Zoom zoom!'], ['⚡', 'Speedy legs!'], ['🌈', 'Runner’s high!'], ['🐆', 'Cheetah mode'], ['👟', 'Miles in the bank']],
-  class: [['🎉', 'Class crushed!'], ['💃', 'Nice moves!'], ['🌟', 'Bonus energy!']],
+  lift: [['lift', 'Beast mode!'], ['flex', 'Stronger than yesterday'], ['flame', 'On fire!'], ['lift', 'Gains incoming'], ['flex', 'Strong like a bear'], ['star', 'Lift-off!']],
+  pt: [['lift', 'Great PT session!'], ['star', 'Coach-approved!'], ['flame', 'PT crushed it — and so did you']],
+  jog: [['jog', 'Zoom zoom!'], ['flame', 'Speedy legs!'], ['jog', 'Runner’s high!'], ['star', 'Cheetah mode'], ['jog', 'Miles in the bank']],
+  class: [['dance', 'Class crushed!'], ['dance', 'Nice moves!'], ['star', 'Bonus energy!']],
 };
 const FX = ['pop', 'spin', 'bounce', 'rocket', 'wobble'];
 function fanfare(big) {
@@ -1084,7 +1085,8 @@ function showSurprise({ emoji, title, sub, big }) {
     const sparks = Array.from({ length: big ? 0 : 12 }, (_, i) => `<span style="--a:${i * 30 + Math.round(Math.random() * 14)}deg">${pick(['✨', '⭐', '💥', '★'])}</span>`).join('');
     const fw = big ? Array.from({ length: 5 }, () => `<div class="fw" style="left:${10 + Math.random() * 80}%;top:${8 + Math.random() * 45}%;animation-delay:${(Math.random() * 0.9).toFixed(2)}s">${
       Array.from({ length: 14 }, (_, i) => `<i style="--a:${i * (360 / 14)}deg;background:${pick(['#fab219', '#0ca30c', '#2a78d6', '#eb6834', '#e0457b'])}"></i>`).join('')}</div>`).join('') : '';
-    el.innerHTML = `${fw}<div class="sp-card"><div class="sp-emoji">${emoji}</div><div class="sp-burst" aria-hidden="true">${sparks}</div>
+    const pic = emoji.startsWith('<') ? emoji : ART[emoji] ? ART[emoji](big ? 120 : 100) : emoji;
+    el.innerHTML = `${fw}<div class="sp-card"><div class="sp-emoji">${pic}</div><div class="sp-burst" aria-hidden="true">${sparks}</div>
       <div class="sp-title">${title}</div>${sub ? `<div class="sp-sub">${sub}</div>` : ''}</div>`;
     document.body.appendChild(el);
     fanfare(big);
@@ -1101,19 +1103,19 @@ async function surpriseAfterLog(before, what) {
   db.quest = { ws: a.ws, stars: a.st.total }; save(); // so the Train card doesn't celebrate twice
   const ev = [];
   if (a.m === 'gold' && before.m !== 'gold') {
-    ev.push({ big: true, emoji: '🏆', title: 'GOLD WEEK!', sub: `All ${a.st.max} stars earned${a.streak > 1 ? ` · 🔥 ${a.streak} gold weeks in a row` : ' · your 🔥 streak starts now'}` });
+    ev.push({ big: true, emoji: 'trophy', title: 'GOLD WEEK!', sub: `All ${a.st.max} stars earned${a.streak > 1 ? ` · ${a.streak} gold weeks in a row` : ' · your streak starts now'}` });
   } else {
-    if (a.st.lift >= a.st.liftMax && before.st.lift < before.st.liftMax) ev.push({ big: true, emoji: '🏋️', title: 'Lifting goal smashed!', sub: `${a.st.liftMax} sessions this week — every ⭐ earned` });
-    if (a.st.jog >= a.st.jogMax && before.st.jog < before.st.jogMax) ev.push({ big: true, emoji: '🏁', title: `${Math.round((a.st.jogMax * a.st.per) / 60)} hours run!`, sub: 'Jogging goal complete' });
-    if (!ev.length && a.m && a.m !== before.m) ev.push({ emoji: MEDALS[a.m][0], title: `${MEDALS[a.m][1]} unlocked!`, sub: `${a.st.total}/${a.st.max} ★ this week` });
+    if (a.st.lift >= a.st.liftMax && before.st.lift < before.st.liftMax) ev.push({ big: true, emoji: 'lift', title: 'Lifting goal smashed!', sub: `${a.st.liftMax} sessions this week — every ⭐ earned` });
+    if (a.st.jog >= a.st.jogMax && before.st.jog < before.st.jogMax) ev.push({ big: true, emoji: 'flag', title: `${Math.round((a.st.jogMax * a.st.per) / 60)} hours run!`, sub: 'Jogging goal complete' });
+    if (!ev.length && a.m && a.m !== before.m) ev.push({ emoji: ART.medal(a.m, 100), title: `${MEDALS[a.m][1]} unlocked!`, sub: `${a.st.total}/${a.st.max} ★ this week` });
   }
-  if (a.lv > before.lv) ev.push({ emoji: '⬆️', title: `Level ${a.lv}!`, sub: 'Level up — keep stacking stars' });
+  if (a.lv > before.lv) ev.push({ emoji: 'star', title: `Level ${a.lv}!`, sub: 'Level up — keep stacking stars' });
   if (!ev.length) {
     const [emoji, title] = pick(POPS[what] || POPS.lift);
     const gained = a.st.total - before.st.total;
     const toJogStar = Math.max(0, Math.round((a.st.jog + 1) * a.st.per - a.w.jogMin));
-    const sub = gained > 0 ? `+${gained} ⭐ — ${a.st.total}/${a.st.max} this week`
-      : what === 'jog' && a.st.jog < a.st.jogMax ? `${toJogStar} more min to your next ⭐`
+    const sub = gained > 0 ? `+${gained} ${ART.star(20)} — ${a.st.total}/${a.st.max} this week`
+      : what === 'jog' && a.st.jog < a.st.jogMax ? `${toJogStar} more min to your next ${ART.star(20)}`
       : what === 'class' ? 'Bonus workout — nice!' : `${a.st.total}/${a.st.max} ★ this week`;
     ev.push({ emoji, title, sub });
   }
@@ -1260,7 +1262,7 @@ function memIcs() {
 function helloTitle() {
   const n = (db.settings.name || '').trim(), h = new Date().getHours();
   const hi = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  return `<div class="hello grow"><div class="hello-hi">${hi}${n ? ',' : ''} 👋</div><h1>${n ? esc(n) : 'Ready to train?'}</h1></div>
+  return `<div class="hello grow"><div class="hello-hi">${hi}${n ? ',' : ''} ${ART.wave(22)}</div><h1>${n ? esc(n) : 'Ready to train?'}</h1></div>
     <span class="date-chip num">${new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</span>`;
 }
 /** This week as day pills: ✓ lifted, 🏃 jogged, ★ class; today ringed; days ahead faint. */
@@ -1270,7 +1272,7 @@ function weekStrip() {
     const t = ws + i * 864e5, d = new Date(t);
     const ss = db.sessions.filter((x) => dayStart(new Date(x.date)) === t), ks = ss.map(kindOf);
     const lift = ks.some((k) => k === 'pt' || k === 'self'), jog = ss.some((x) => jogSecs(x) > 0), cls = ks.includes('class');
-    const icon = lift ? ICON.check : jog ? '🏃‍♀️' : cls ? '★' : t === today ? '<i class="ring"></i>' : t > today ? '<i class="dot"></i>' : '<i class="dash"></i>';
+    const icon = lift ? ICON.check : jog ? ART.jog(24) : cls ? ART.dance(24) : t === today ? '<i class="ring"></i>' : t > today ? '<i class="dot"></i>' : '<i class="dash"></i>';
     const cls2 = `${lift || jog || cls ? 'done' : ''} ${t === today ? 'today' : ''} ${t > today ? 'ahead' : ''}`;
     const tip = ss.length ? ss.map((x) => x.dayName || 'Workout').join(', ') : t === today ? 'Today' : t > today ? 'Coming up' : 'Rest day';
     return `<div class="dpill ${cls2}" title="${esc(tip)}"><span class="dp-l">${t === today ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' })}</span><span class="dp-i">${icon}</span></div>`;
@@ -1282,12 +1284,12 @@ function quickAdd() {
   const nd = nextDay();
   openModal(`<div class="row"><h3 class="grow">Log something</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
     <div class="qa-grid">
-      ${nd ? `<button class="qa lav" data-act="m:start"><span class="qa-e">🏋️</span><b>Start workout</b><span>${esc(nd.name)}</span></button>` : ''}
-      <button class="qa peach" data-act="m:jog"><span class="qa-e">🏃‍♀️</span><b>Log a jog</b><span>Minutes &amp; km</span></button>
-      <button class="qa mint" data-act="m:cls"><span class="qa-e">💃</span><b>Log a class</b><span>Pilates, yoga…</span></button>
-      <button class="qa sky" data-act="m:watch"><span class="qa-e">⌚</span><b>From Watch</b><span>Paste workout</span></button>
-      <button class="qa plain" data-act="m:past"><span class="qa-e">🗓️</span><b>Log past</b><span>Any earlier day</span></button>
-      <button class="qa plain" data-act="m:scan"><span class="qa-e">📷</span><b>Body scan</b><span>Upload a result</span></button>
+      ${nd ? `<button class="qa lav" data-act="m:start"><span class="qa-e">${ART.lift(44)}</span><b>Start workout</b><span>${esc(nd.name)}</span></button>` : ''}
+      <button class="qa peach" data-act="m:jog"><span class="qa-e">${ART.jog(44)}</span><b>Log a jog</b><span>Minutes &amp; km</span></button>
+      <button class="qa mint" data-act="m:cls"><span class="qa-e">${ART.dance(44)}</span><b>Log a class</b><span>Pilates, yoga…</span></button>
+      <button class="qa sky" data-act="m:watch"><span class="qa-e">${ART.watch(44)}</span><b>From Watch</b><span>Paste workout</span></button>
+      <button class="qa plain" data-act="m:past"><span class="qa-e">${ART.calendar(44)}</span><b>Log past</b><span>Any earlier day</span></button>
+      <button class="qa plain" data-act="m:scan"><span class="qa-e">${ART.scan(44)}</span><b>Body scan</b><span>Upload a result</span></button>
     </div>`, {
     close: closeModal,
     start: () => { closeModal(); startWorkout(nd.id); },
@@ -1475,7 +1477,7 @@ function compositionViz(s, first) {
   };
   const u = unit();
   return `<div class="viz-block">
-    <div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">🧁</span>What your ${fmt1(w)} ${u} is made of</b></div>
+    <div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">${ART.pie(30)}</span>What your ${fmt1(w)} ${u} is made of</b></div>
     <div class="comp-bar" role="img" aria-label="${parts.map((p) => `${p[1]} ${fmt1(p[2])} ${u}`).join(', ')}">
       ${parts.map((p) => `<span class="seg-${p[0]}" style="flex:${p[2]}" title="${p[1]}: ${fmt1(p[2])} ${u} (${Math.round((p[2] / tot) * 100)}%)"></span>`).join('')}
     </div>
@@ -1560,11 +1562,11 @@ function scorecardViz(s) {
       <span class="t-v num">${x.valTxt}${x.un && x.un !== '/10' ? ` <small>${x.un}</small>` : x.un ? '<small>/10</small>' : ''}</span><span class="t-s">${x.st.text}</span></summary>
       <p>${x.tip}${x.r ? ` <b>Your range: ${x.r[0]}–${x.r[1]}${x.un && x.un !== '/10' ? ` ${x.un}` : ''}.</b>` : ''}</p></details>`;
   return `<div class="viz-block">
-    <div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">🎯</span>Where you stand</b><span class="small faint">tap a tile</span></div>
+    <div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">${ART.target(30)}</span>Where you stand</b><span class="small faint">tap a tile</span></div>
     <div class="sc-strip" role="img" aria-label="${good.length} optimal, ${work.length} need work">${work.map((x) => `<span class="warn" title="${x.name}: ${x.st.text}"></span>`).join('')}${good.map((x) => `<span class="good" title="${x.name}: ${x.st.text}"></span>`).join('')}</div>
     <div class="sc-count"><span class="st warn">▼ ${work.length} to work on</span><span class="st good">✓ ${good.length} optimal</span></div>
-    ${work.length ? `<div class="sc-h warn">Needs work</div><div class="tiles">${work.map(tile).join('')}</div>` : ''}
-    ${good.length ? `<div class="sc-h good">Already optimal</div><div class="tiles">${good.map(tile).join('')}</div>` : ''}
+    ${work.length ? `<div class="sc-h warn">${ART.sprout(24)}Needs work</div><div class="tiles">${work.map(tile).join('')}</div>` : ''}
+    ${good.length ? `<div class="sc-h good">${ART.star(24)}Already optimal</div><div class="tiles">${good.map(tile).join('')}</div>` : ''}
   </div>`;
 }
 /** Every measure with a healthy range, as a coloured zone bar:
@@ -1596,7 +1598,7 @@ function rangeZones(s) {
       <div class="rb-f">${foot}</div>
     </div>`;
   });
-  return `<div class="viz-block"><div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">💪</span>Body parts vs healthy range</b></div>
+  return `<div class="viz-block"><div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">${ART.tape(30)}</span>Body parts vs healthy range</b></div>
     <div class="zb-key small"><span><i class="z ok"></i>Healthy</span><span><i class="z bad"></i>Work on</span><span><i class="z fine"></i>Fine</span></div>
     ${rows.join('')}</div>`;
 }
@@ -1675,8 +1677,8 @@ function gaugesViz(s) {
     bio == null || age == null ? '' : gauge('Bio age vs your age', bio, [{ from: age - 12, to: age + 0.5, label: 'Younger', good: true }, { from: age + 0.5, to: age + 12, label: 'Older' }],
       age - 12, age + 12, (v) => `${v} yrs`, `your age is ${age}${bio < age ? ` — ${age - bio} years younger` : ''}`),
   ];
-  const body = sec('⚖️ Weight', [weight]) + sec('💪 Muscle', muscle) + sec('🍩 Fat', fatSec) + sec('✨ Overall', overall);
-  return body ? `<div class="viz-block"><div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">💖</span>Health scores</b><span class="small faint">scan, WHO &amp; Evolt</span></div>
+  const body = sec(`${ART.scale(22)}Weight`, [weight]) + sec(`${ART.flex(22)}Muscle`, muscle) + sec(`${ART.drop(22)}Fat`, fatSec) + sec(`${ART.star(22)}Overall`, overall);
+  return body ? `<div class="viz-block"><div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">${ART.heart(30)}</span>Health scores</b><span class="small faint">scan, WHO &amp; Evolt</span></div>
     <div class="zb-key small"><span><i class="z ok"></i>Healthy</span><span><i class="z bad"></i>Work on</span></div>${body}</div>` : '';
 }
 
@@ -1691,7 +1693,7 @@ function bodyMapViz(s) {
   const tip = (x, n) => `<title>${n}: ${x.v == null ? 'no data' : `${fmtN(x.v)} ${unit()}${x.st ? ` — ${x.st.text}` : ''}`}</title>`;
   // the figure faces you, so the person's right side is on the left of the picture
   return `<div class="viz-block">
-    <div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">🧸</span>Lean mass by body part</b><span class="small faint">facing you</span></div>
+    <div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">${ART.flex(30)}</span>Lean mass by body part</b><span class="small faint">facing you</span></div>
     <svg class="bodymap" viewBox="0 0 300 236" role="img" aria-label="Body map of lean mass by segment">
       <circle class="head" cx="150" cy="23" r="18"/>
       <ellipse class="blush" cx="139" cy="28" rx="4" ry="2.4"/><ellipse class="blush" cx="161" cy="28" rx="4" ry="2.4"/>
@@ -1737,14 +1739,14 @@ function bodyHero(s) {
     <div class="b-hero-t"><span class="b-chip">Latest scan · ${shortDate(s.date)}</span>
       <div class="b-msg">${msg}</div>
       <div class="b-counts"><span class="b-c good"><b class="num">${good}</b> optimal</span><span class="b-c warn"><b class="num">${work}</b> to work on</span></div>
-      <span class="b-next">🗓️ Next scan ${nextScanText(s)}</span></div>
+      <span class="b-next il">${ART.calendar(20)}Next scan ${nextScanText(s)}</span></div>
     ${blobFace(mood)}
   </section>`;
 }
 function bodyView() {
   const sc = sortedScans();
   const title = '<h1>Body</h1><button class="btn sm soft" data-act="add-scan">+ Scan</button>';
-  const fuel = `<div class="card fuel small muted" style="line-height:1.6"><span class="fuel-e" aria-hidden="true">🥑</span><b style="color:var(--text)">Daily fuel for muscle gain</b><br>
+  const fuel = `<div class="card fuel small muted" style="line-height:1.6"><span class="fuel-e" aria-hidden="true">${ART.avocado(34)}</span><b style="color:var(--text)">Daily fuel for muscle gain</b><br>
     About <b class="num" style="color:var(--text)">${Number(db.goals.kcal).toLocaleString()} kcal</b> and <b class="num" style="color:var(--text)">${db.goals.protein} g protein</b> a day, protein spread over 3–4 meals.
     Add ~200–300 kcal on long jog days. If your weight hasn’t gone up after 4 weeks, add 100–150 kcal. Change these in Settings.</div>`;
   if (!sc.length) {
@@ -1769,7 +1771,7 @@ function bodyView() {
     title,
     body: `<div class="stack">
       ${overview}
-      <div class="section-title" style="margin:10px 2px 0">📈 Trends</div>
+      <div class="section-title il" style="margin:10px 2px 0">${ART.chart(26)}Trends</div>
       <div class="seg full" role="tablist">${BODY.map(([key, l]) => `<button class="${key === k ? 'on' : ''}" data-act="body-metric" data-k="${key}">${l}</button>`).join('')}</div>
       <div class="stats">
         <div class="stat"><div class="v num">${fmtV(last)}</div><div class="k">${meta[2]}</div></div>

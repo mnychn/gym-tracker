@@ -425,6 +425,132 @@ function nextScanText(latest) {
   return due > Date.now() ? `due ${shortDate(due)}` : 'due now';
 }
 
+// ---------------------------------------------------------------- read a scan sheet from a photo (on-device OCR)
+// Tesseract.js (Apache-2.0) is bundled in vendor/tesseract and only loaded when you upload a scan.
+// The image never leaves the device.
+let ocrWorker = null;
+function loadScript(src) {
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('load ' + src)); document.head.appendChild(s); });
+}
+async function getOcr(onProgress) {
+  if (ocrWorker) return ocrWorker;
+  const base = new URL('vendor/tesseract/', location.href).href;
+  if (!window.Tesseract) await loadScript(base + 'tesseract.min.js');
+  ocrWorker = await window.Tesseract.createWorker('eng', 1, {
+    workerPath: base + 'worker.min.js', corePath: base, langPath: base, workerBlobURL: false,
+    logger: (m) => { if (onProgress && m.status === 'recognizing text') onProgress(m.progress); },
+  });
+  return ocrWorker;
+}
+function fileImage(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => { res(img); setTimeout(() => URL.revokeObjectURL(url), 1000); };
+    img.onerror = () => rej(new Error('Not an image'));
+    img.src = url;
+  });
+}
+/** Scale to ~1800px wide and threshold: white text on the coloured sheet becomes dark on light. */
+function prepImage(img) {
+  const sc = Math.min(3, 1800 / img.naturalWidth);
+  const mk = () => {
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * sc); c.height = Math.round(img.naturalHeight * sc);
+    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, c.width, c.height);
+    return [c, g];
+  };
+  const [plain] = mk(), [inv, g] = mk();
+  const d = g.getImageData(0, 0, inv.width, inv.height), p = d.data;
+  for (let i = 0; i < p.length; i += 4) { const y = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2]; const v = y > 200 ? 0 : 255; p[i] = p[i + 1] = p[i + 2] = v; }
+  g.putImageData(d, 0, 0);
+  return { plain, inv };
+}
+// field → label pattern on the sheet (Evolt 360; similar wording on InBody), plausible range
+const SCAN_LABELS = {
+  weight: [/\bWEIGHT\b/i, 25, 250], lbm: [/LEAN\s*BODY\s*MASS/i, 15, 120], smm: [/SKELETAL\s*MUSCLE/i, 8, 80],
+  fat: [/BODY\s*FAT\s*(PERCENT|%)|PERCENT\s*BODY\s*FAT|PBF/i, 3, 70],
+  armL: [/LEFT\s*ARM/i, 0.3, 8], armR: [/RIGHT\s*ARM/i, 0.3, 8], legL: [/LEFT\s*LEG/i, 1.5, 25], legR: [/RIGHT\s*LEG/i, 1.5, 25],
+};
+/** words: [{t, x, y}] with x/y as fractions of image width. Returns {fields, date}. */
+function parseScanWords(words, lines, valueWords = []) {
+  const out = {};
+  const toNums = (ws) => ws.map((w) => {
+    const m = w.t.replace(',', '.').match(/^(\d{1,3}(?:\.\d{1,2})?)%?\/?$/); // ranges like [36.6 or (1.98 don't match
+    return m && (m[1].includes('.') || +m[1] >= 100) ? { v: +m[1], x: w.x, y: w.y } : null; // scan values have decimals (or lost their dot)
+  }).filter(Boolean);
+  const primary = toNums(valueWords);
+  const nums = primary.concat(toNums(words).filter((n) => !primary.some((q) => Math.abs(q.x - n.x) < 0.02 && Math.abs(q.y - n.y) < 0.01)));
+  const fit = (v, lo, hi) => { for (const f of [1, 0.1, 0.01]) { if (v * f >= lo && v * f <= hi) return +(v * f).toFixed(2); } return null; };
+  Object.entries(SCAN_LABELS).forEach(([k, [re, lo, hi]]) => {
+    for (const ln of lines) {
+      const m = ln.text.match(re); if (!m) continue;
+      // which word does the match start in?
+      let pos = 0, lw = ln.words[0];
+      for (const w of ln.words) { if (pos + w.t.length >= m.index) { lw = w; break; } pos += w.t.length + 1; }
+      const below = nums.filter((n) => n.y > lw.y + 0.004 && n.y < lw.y + 0.06);
+      let cand;
+      if (/^(armL|legL)$/.test(k)) cand = below.filter((n) => n.x < lw.x).sort((a, b) => a.y - b.y || a.x - b.x);
+      else cand = below.filter((n) => n.x > lw.x - 0.09 && n.x < lw.x + 0.12).sort((a, b) => a.y - b.y || a.x - b.x);
+      if (cand.length) {
+        const rowY = cand[0].y, row = cand.filter((n) => Math.abs(n.y - rowY) < 0.012);
+        const pick = /^(armL|legL)$/.test(k) ? row.sort((a, b) => a.x - b.x)[0] : row.sort((a, b) => Math.abs(a.x - lw.x) - Math.abs(b.x - lw.x))[0];
+        const v = fit(pick.v, lo, hi);
+        if (v != null) { out[k] = v; break; }
+      }
+    }
+  });
+  // date like 09-11-2026 or 11/9/2026 — day first unless the phone is set to US format
+  let date = null;
+  const dm = lines.map((l) => l.text).join(' ').match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](20\d{2})\b/);
+  if (dm) {
+    let [a, b] = [+dm[1], +dm[2]];
+    const us = /^en-US/i.test(navigator.language || '');
+    let day = us ? b : a, mon = us ? a : b;
+    if (mon > 12 && day <= 12) [day, mon] = [mon, day];
+    if (mon >= 1 && mon <= 12 && day >= 1 && day <= 31) date = `${dm[3]}-${pad(mon)}-${pad(day)}`;
+  }
+  return { fields: out, date };
+}
+async function readScanFile(file, onProgress) {
+  const img = await fileImage(file);
+  const { plain, inv } = prepImage(img);
+  let half = 0;
+  const w = await getOcr((p) => onProgress && onProgress(half + p / 2));
+  const run = async (canvas) => {
+    const r = await w.recognize(canvas, {}, { blocks: true });
+    const W = canvas.width, words = [], lines = [];
+    (r.data.blocks || []).forEach((b) => b.paragraphs.forEach((p) => p.lines.forEach((l) => {
+      const lw = l.words.map((x) => ({ t: x.text, x: x.bbox.x0 / W, y: x.bbox.y0 / W }));
+      words.push(...lw); lines.push({ text: lw.map((x) => x.t).join(' '), words: lw });
+    })));
+    return { words, lines };
+  };
+  const a = await run(inv); // labels (white on colour) + most values
+  half = 0.5;
+  const b = await run(plain); // values in white boxes, read more accurately
+  const res = parseScanWords(a.words, a.lines.concat(b.lines), b.words);
+  return res;
+}
+async function onScanUpload(file) {
+  const st = $('#sc-status');
+  const say = (h) => { if (st) { st.hidden = false; st.innerHTML = h; } };
+  say('Reading your scan… <span class="num" id="sc-pct">0%</span> <span class="faint">(first time downloads the reader, ~10 MB)</span>');
+  try {
+    const res = await readScanFile(file, (p) => { const e = $('#sc-pct'); if (e) e.textContent = `${Math.round(p * 100)}%`; });
+    if (!$('#sc-date')) return; // modal closed meanwhile
+    const got = Object.keys(res.fields);
+    document.querySelectorAll('.scan-grid .field.filled, #sc-date.filled').forEach((e) => e.classList.remove('filled'));
+    got.forEach((k) => { const e = $(`#sc-${k}`); if (e) { e.value = res.fields[k]; e.classList.add('filled'); } });
+    if (res.date) { $('#sc-date').value = res.date; $('#sc-date').classList.add('filled'); }
+    const missing = SCAN_FIELDS.filter(([k]) => !got.includes(k)).map(([, l]) => l);
+    say(got.length
+      ? `<b>Read ${got.length} value${got.length === 1 ? '' : 's'}</b> (highlighted). Check them — and the date — against your sheet before saving.${missing.length ? `<br><span class="faint">Not found: ${missing.join(', ')}.</span>` : ''}`
+      : 'Couldn’t find scan values in that image. Try a sharper screenshot of the result sheet, or type the numbers in.');
+  } catch (e) {
+    say('Couldn’t read that file. Use a photo or screenshot (JPG/PNG/HEIC), or type the numbers in.');
+  }
+}
+
 function scanModal(scan) {
   const isNew = !scan;
   const now = new Date(); now.setHours(8, 0, 0, 0);
@@ -433,7 +559,9 @@ function scanModal(scan) {
   const u = (x) => (x === 'w' ? unit() : x);
   openModal(`
     <div class="row"><h3 class="grow">${isNew ? 'Add body scan' : 'Edit body scan'}</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
-    <p class="small muted">Copy the numbers from your scan sheet. Leave anything you don’t have blank.</p>
+    <label class="btn soft big upload" style="margin-top:6px">📷 Upload scan photo or screenshot
+      <input type="file" accept="image/*" id="sc-file" style="position:absolute;inset:0;opacity:0"></label>
+    <p class="small muted" id="sc-status" style="margin-top:8px">Reads the numbers on your phone — the image isn’t uploaded anywhere. Or type them in below.</p>
     <div style="margin-top:10px"><label class="lbl">Date</label><input type="date" class="field" id="sc-date" value="${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}"></div>
     <div class="scan-grid">${SCAN_FIELDS.map(([k, l, un]) => `<div><label class="lbl">${l} <span class="faint">${u(un)}</span></label>
       <input class="field" id="sc-${k}" value="${esc(s[k] ?? '')}" inputmode="decimal"></div>`).join('')}</div>
@@ -1482,6 +1610,7 @@ document.addEventListener('change', (ev) => {
   const el = ev.target;
   if (el.type === 'checkbox') onBind(el);
   if (el.dataset && el.dataset.bind === 'import' && el.files && el.files[0]) importData(el.files[0]);
+  if (el.id === 'sc-file' && el.files && el.files[0]) { onScanUpload(el.files[0]); el.value = ''; }
   if (el.dataset && el.dataset.bind === 'set' && el.dataset.f === 'w') el.inputMode = wMode(el.value);
 });
 document.addEventListener('keydown', (ev) => {

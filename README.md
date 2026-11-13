@@ -13,6 +13,7 @@ After changing any file, bump `VERSION` in `sw.js` so installed copies update.
 - **Train tab:** weekly targets for gym sessions and jogging minutes, the last 6 weeks, and quick “Log a jog / Log a class”.
 - **Progress → Body:** body-scan log (weight, skeletal muscle, fat %, lean mass, arm/leg lean mass) with a muscle-gain goal line.
 - **Apple Watch:** a free Apple Shortcuts automation copies each finished watch workout; “Paste from Watch” imports it (runs → jogging target, classes → gym sessions, strength → calories/HR on that day’s session). Setup guide: Settings → Apple Watch.
+- **Scan upload:** Progress → Body → + Scan → Upload reads an Evolt-style result sheet on-device with [Tesseract.js](https://github.com/naptha/tesseract.js) (Apache-2.0, bundled in `vendor/tesseract`). The image never leaves the device.
 - Body scans and workouts stay on each device (and in your exported backups) — never in this repo.
 
 ## Credits

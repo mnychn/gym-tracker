@@ -1,5 +1,6 @@
 // Bump VERSION whenever you change any app file so devices pick up the update.
-const VERSION = 'gymlog-v9';
+const VERSION = 'gymlog-v10';
+const VENDOR = 'gymlog-vendor-1';
 const ASSETS = [
   './', './index.html', './styles.css', './app.js', './seed.js', './guides.js', './anim.js', './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
@@ -89,7 +90,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== VENDOR).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -106,6 +107,11 @@ self.addEventListener('fetch', (e) => {
         return res;
       }).catch(() => caches.match('./index.html'))
     );
+    return;
+  }
+  // the scan reader (vendor/) is big and only fetched on first use — keep it in its own cache across app updates
+  if (new URL(req.url).pathname.includes('/vendor/')) {
+    e.respondWith(caches.open(VENDOR).then((c) => c.match(req).then((hit) => hit || fetch(req).then((res) => { if (res.ok) c.put(req, res.clone()); return res; }))));
     return;
   }
   e.respondWith(caches.match(req).then((hit) => hit || fetch(req)));

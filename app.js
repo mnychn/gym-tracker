@@ -736,10 +736,13 @@ function quickLogModal(kind) {
   openModal(`
     <div class="row"><h3 class="grow">${isJog ? 'Log a jog' : 'Log a class'}</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
     <div class="seg full" style="margin-top:10px"><button class="${isJog ? 'on' : ''}" data-act="m:jog">Jog</button><button class="${isJog ? '' : 'on'}" data-act="m:cls">Class</button></div>
-    ${isJog ? '' : `<div style="margin-top:12px"><label class="lbl">Class</label><input class="field" id="ql-name" placeholder="e.g. Pilates, Body Pump, Spin" autofocus></div>`}
-    <div class="row" style="margin-top:12px">
+    ${isJog ? '' : `<div style="margin-top:12px"><label class="lbl">Class</label><input class="field" id="ql-name" placeholder="e.g. Pilates, Body Pump, Spin"></div>`}
+    <div class="lbl" style="margin-top:14px">Tap to log ${isJog ? 'a jog' : 'it'} today</div>
+    <div class="qmin">${[20, 30, 45, 60, 90].map((m) => `<button class="btn soft" data-act="m:quick" data-m="${m}">${m}<small> min</small></button>`).join('')}</div>
+    <div class="lbl" style="margin-top:14px">Or fill in the details</div>
+    <div class="row" style="margin-top:4px">
       <div class="grow"><label class="lbl">Date</label><input type="date" class="field" id="ql-date" value="${dv}" max="${dv}"></div>
-      <div style="width:96px"><label class="lbl">Minutes</label><input class="field" id="ql-min" inputmode="numeric" value="45" ${isJog ? 'autofocus' : ''}></div>
+      <div style="width:96px"><label class="lbl">Minutes</label><input class="field" id="ql-min" inputmode="numeric" value="45"></div>
       ${isJog ? '<div style="width:96px"><label class="lbl">km <span class="faint">optional</span></label><input class="field" id="ql-km" inputmode="decimal"></div>' : ''}
     </div>
     <p class="small muted" style="margin-top:10px">${isJog ? `Counts toward your ${db.goals.jogMin} min jogging target. Tip: you can also start the <b>Jog</b> day to use a timer.` : 'Saved as a class — extra to your weight-lifting target.'}</p>
@@ -748,6 +751,7 @@ function quickLogModal(kind) {
     close: closeModal,
     jog: () => quickLogModal('jog'),
     cls: () => quickLogModal('class'),
+    quick: (el) => { $('#ql-min').value = el.dataset.m; $('#ql-date').value = dv; ui.modalActs.save(); },
     save: () => {
       const min = toNum($('#ql-min').value);
       if (!min || min <= 0) { toast('Enter the minutes'); $('#ql-min').focus(); return; }

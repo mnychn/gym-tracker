@@ -945,64 +945,109 @@ const meter = (v, max) => `<div class="meter" role="presentation"><span style="w
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const KIND_TAG = { pt: 'PT', self: 'Own', class: 'Class' };
 
-/** Gym sessions as slots: filled = done (labelled by type), empty = still to do. */
-function sessionSlots(w, g) {
+// ---------------------------------------------------------------- weekly quest (gamified goals)
+// Stars: one per lifting session (up to the target) + one per jogging hour. All stars = gold medal; gold weeks build a streak.
+function weekStars(w, g) {
+  const jh = Math.max(1, Math.round((toNum(g.jogMin) || 60) / 60)), per = (toNum(g.jogMin) || 60) / jh;
+  const liftMax = Math.max(1, toNum(g.sessions) || 3);
+  const lift = Math.min(w.gym, liftMax), jog = Math.min(jh, Math.floor(w.jogMin / per + 1e-9));
+  return { lift, jog, liftMax, jogMax: jh, per, total: lift + jog, max: liftMax + jh };
+}
+const MEDALS = { gold: ['🥇', 'Gold'], silver: ['🥈', 'Silver'], bronze: ['🥉', 'Bronze'] };
+const medalNeed = (st, m) => (m === 'gold' ? st.max : m === 'silver' ? Math.ceil((st.max * 2) / 3) : Math.ceil(st.max / 3));
+function medalOf(st) {
+  return ['gold', 'silver', 'bronze'].find((m) => st.total >= medalNeed(st, m)) || null;
+}
+/** Lifetime stars → level; consecutive gold weeks → streak (this week counts once it's gold). */
+function questStats(ws, g) {
+  const first = db.sessions.reduce((m, x) => Math.min(m, new Date(x.date).getTime()), Infinity);
+  let stars = 0;
+  if (isFinite(first)) for (let t = weekStartOf(new Date(first)); t <= ws; t += 7 * 864e5) stars += weekStars(weekStats(t), g).total;
+  let streak = medalOf(weekStars(weekStats(ws), g)) === 'gold' ? 1 : 0;
+  for (let t = ws - 7 * 864e5, n = 0; n < 520 && medalOf(weekStars(weekStats(t), g)) === 'gold'; t -= 7 * 864e5, n++) streak += 1;
+  const PER = 10, level = 1 + Math.floor(stars / PER);
+  return { stars, level, toNext: PER - (stars % PER), lvPct: ((stars % PER) / PER) * 100, streak };
+}
+/** Lifting: one badge per session — PT or own — with empty badges still to earn. */
+function liftBadges(w, g) {
   const n = Math.max(g.sessions, w.days.length);
   return `<div class="slots" role="img" aria-label="${w.gym} of ${g.sessions} lifting sessions done">${Array.from({ length: n }, (_, i) => {
     const k = w.days[i];
-    if (k) return `<span class="slot done ${k}" title="${KINDS[k]}">${ICON.check}<b>${KIND_TAG[k]}</b></span>`;
-    return '<span class="slot" title="To do"></span>';
+    return k ? `<span class="slot done ${k}" title="${KINDS[k]}">⭐<b>${k === 'pt' ? 'PT' : 'Own'}</b></span>` : '<span class="slot" title="To do">☆</span>';
   }).join('')}</div>`;
 }
-/** Jogging: one segment per run on a track to the target, ticks every hour. */
-function jogTrack(ws, g) {
-  const runs = db.sessions.filter((s) => { const t = new Date(s.date).getTime(); return t >= ws && t < ws + 7 * 864e5; })
-    .map((s) => ({ m: jogSecs(s) / 60, d: s.date })).filter((r) => r.m > 0).sort((a, b) => (a.d < b.d ? -1 : 1));
-  const total = runs.reduce((t, r) => t + r.m, 0), max = Math.max(g.jogMin, total);
-  const ticks = []; for (let h = 60; h < max; h += 60) ticks.push(h);
-  return `<div class="jogtrack" role="img" aria-label="${Math.round(total)} of ${g.jogMin} minutes jogging">
-      ${runs.map((r) => `<span class="run" style="width:${(r.m / max) * 100}%" title="${shortDate(r.d)}: ${Math.round(r.m)} min"></span>`).join('')}
-      ${ticks.map((h) => `<i class="tick" style="left:${(h / max) * 100}%"></i>`).join('')}
-      ${g.jogMin < max ? `<i class="tick goal" style="left:${(g.jogMin / max) * 100}%"></i>` : ''}
+/** Jogging as a road: the runner moves along, each hour is a star flag, the last one is the finish. */
+function jogRoad(w, st) {
+  const goal = st.jogMax * st.per, max = Math.max(goal, w.jogMin), X = (m) => Math.min(100, (m / max) * 100);
+  const flags = Array.from({ length: st.jogMax }, (_, i) => (i + 1) * st.per);
+  return `<div class="road" role="img" aria-label="${w.jogMin} of ${Math.round(goal)} minutes jogging">
+      <span class="road-fill" style="width:${X(w.jogMin)}%"></span>
+      ${flags.map((m, i) => `<i class="flag ${w.jogMin >= m ? 'on' : ''} ${i === flags.length - 1 ? 'fin' : ''}" style="left:${X(m)}%">${i === flags.length - 1 ? '🏁' : '★'}</i>`).join('')}
+      <b class="runner" style="left:${X(w.jogMin)}%">🏃‍♀️</b>
     </div>
-    <div class="jogscale">${ticks.concat(g.jogMin >= max ? [g.jogMin] : []).map((h) => `<span style="left:${(h / max) * 100}%">${h % 60 ? h + 'm' : h / 60 + 'h'}</span>`).join('')}</div>`;
+    <div class="jogscale">${flags.map((m) => `<span style="left:${X(m)}%">${m % 60 ? `${Math.round(m)}m` : `${m / 60}h`}</span>`).join('')}</div>`;
 }
-/** Last 6 weeks as two small bar charts (gym sessions, jog minutes), each with its target line. */
-function pastWeeks(ws, g) {
-  const weeks = [6, 5, 4, 3, 2, 1].map((i) => { const s = ws - i * 7 * 864e5; return { s, ...weekStats(s) }; });
-  const chart = (key, target, fmt, short, label) => {
-    const max = Math.max(target, ...weeks.map((x) => x[key])) || 1;
-    return `<div class="pw-row"><span class="pw-l">${label}</span><div class="pw" role="img" aria-label="${label} per week, target ${fmt(target)}">
-      <i class="tgt" style="bottom:${(target / max) * 100}%"></i>
-      ${weeks.map((x) => { const v = x[key]; return `<div class="pw-c" title="Week of ${shortDate(x.s)}: ${fmt(v)}">
-        <span class="bar ${v >= target ? 'hit' : ''}" style="height:${(v / max) * 100}%"><em>${v ? short(v) : ''}</em></span></div>`; }).join('')}
-    </div></div>`;
-  };
-  return `<div class="pw-wrap">
-    ${chart('gym', g.sessions, (v) => plural(v, 'lifting session'), (v) => v, 'Lift')}
-    ${chart('jogMin', g.jogMin, (v) => `${v} min`, (v) => (v >= 60 ? `${+(v / 60).toFixed(1)}h` : `${v}m`), 'Jog')}
-    <div class="pw-row"><span class="pw-l"></span><div class="pw-x">${weeks.map((x) => `<span>${shortDate(x.s)}</span>`).join('')}</div></div>
-  </div>`;
+/** Last 6 weeks as a medal shelf. */
+function medalShelf(ws, g) {
+  const weeks = [6, 5, 4, 3, 2, 1].map((i) => { const s = ws - i * 7 * 864e5, w = weekStats(s), st = weekStars(w, g); return { s, w, st, m: medalOf(st) }; });
+  return `<div class="shelf">${weeks.map((x) => `<div class="shelf-c" title="Week of ${shortDate(x.s)}: ${x.w.gym} lifts, ${x.w.jogMin} min jog — ${x.st.total}/${x.st.max} stars">
+      <span class="shelf-m ${x.m ? '' : 'none'}">${x.m ? MEDALS[x.m][0] : '○'}</span>
+      <span class="shelf-n num">${x.st.total}★</span><span class="shelf-d">${shortDate(x.s)}</span></div>`).join('')}</div>`;
 }
-
-/** This week's targets: gym sessions (PT + own/class) and jogging minutes, plus the last 6 weeks. */
+function questLine(st, w, daysLeft) {
+  const m = medalOf(st);
+  if (m === 'gold') return 'All stars earned — gold week! 🎉';
+  const next = m === 'silver' ? 'gold' : m === 'bronze' ? 'silver' : 'bronze';
+  const need = medalNeed(st, next) - st.total;
+  const liftLeft = st.liftMax - st.lift, jogLeftMin = Math.max(0, Math.round(st.jogMax * st.per - w.jogMin));
+  const bits = [];
+  if (liftLeft) bits.push(plural(liftLeft, 'lift'));
+  if (jogLeftMin) bits.push(`${jogLeftMin} min jog`);
+  return `<b>${plural(need, 'star')}</b> to ${MEDALS[next][0]} ${MEDALS[next][1]} · gold needs ${bits.join(' + ')} in ${plural(daysLeft + 1, 'day')}`;
+}
+/** Confetti burst for a newly earned star (skipped with reduced motion). */
+function celebrate(msg) {
+  toast(msg);
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const box = document.createElement('div'); box.className = 'confetti'; box.setAttribute('aria-hidden', 'true');
+  const bits = ['⭐', '✨', '🎉', '💪', '★'];
+  box.innerHTML = Array.from({ length: 26 }, (_, i) => `<span style="left:${Math.random() * 100}%;animation-delay:${(Math.random() * 0.3).toFixed(2)}s;font-size:${Math.round(14 + Math.random() * 14)}px">${bits[i % bits.length]}</span>`).join('');
+  document.body.appendChild(box); setTimeout(() => box.remove(), 2400);
+}
 function weekCard() {
   const g = db.goals, now = new Date(), ws = weekStartOf(now), w = weekStats(ws);
   const daysLeft = 6 - ((now.getDay() + 6) % 7);
-  const gymLeft = Math.max(0, g.sessions - w.gym), jogLeft = Math.max(0, g.jogMin - w.jogMin);
-  const done = !gymLeft && !jogLeft;
-  return `<section class="card week">
-    <div class="row"><b class="grow">This week</b>${done ? '<span class="pill accent">✓ Targets hit</span>' : `<span class="pill num">${plural(daysLeft + 1, 'day')} left</span>`}</div>
-    <div class="goal"><div class="row"><span class="grow">Weight lifting${w.classes ? ` <span class="pill">+${plural(w.classes, 'class')}</span>` : ''}</span><span class="num"><b>${w.gym}</b> / ${g.sessions}</span></div>
-      ${sessionSlots(w, g)}</div>
-    <div class="goal"><div class="row"><span class="grow">Jogging</span><span class="num"><b>${w.jogMin}</b> / ${g.jogMin} min</span></div>
-      ${jogTrack(ws, g)}</div>
+  const st = weekStars(w, g), m = medalOf(st), q = questStats(ws, g);
+  // celebrate stars earned since the card was last shown
+  const prev = db.quest && db.quest.ws === ws ? db.quest.stars : null;
+  if (prev !== st.total) {
+    if (prev != null && st.total > prev) {
+      const mPrev = medalOf({ ...st, total: prev });
+      setTimeout(() => celebrate(m && m !== mPrev ? `${MEDALS[m][0]} ${MEDALS[m][1]} unlocked! ${st.total}/${st.max} ★` : `⭐ Star earned — ${st.total}/${st.max} this week`), 350);
+    }
+    db.quest = { ws, stars: st.total }; save();
+  }
+  return `<section class="card week quest">
+    <div class="row"><b class="grow">Weekly quest</b>
+      <span class="pill num" title="${q.stars} stars all-time">⭐ Lv ${q.level}</span>
+      <span class="pill num ${q.streak ? 'streak' : ''}" title="Gold weeks in a row">🔥 ${q.streak}</span></div>
+    <div class="q-head">
+      <div class="q-medal ${m || 'none'}" aria-hidden="true">${m ? MEDALS[m][0] : '🎯'}</div>
+      <div class="grow"><div class="q-score num"><b>${st.total}</b> / ${st.max} ★</div>
+        <div class="small muted">${questLine(st, w, daysLeft)}</div></div>
+    </div>
+    <div class="q-lv" title="${q.toNext} stars to level ${q.level + 1}"><span style="width:${q.lvPct}%"></span></div>
+    <div class="small faint" style="margin-top:4px">${plural(q.toNext, 'star')} to level ${q.level + 1}${q.streak ? ` · ${plural(q.streak, 'gold week')} in a row` : ' · win gold to start a 🔥 streak'}</div>
+    <div class="goal"><div class="row"><span class="grow">🏋️ Weight lifting${w.classes ? ` <span class="pill">+${plural(w.classes, 'class')}</span>` : ''}</span><span class="num"><b>${w.gym}</b> / ${g.sessions}</span></div>
+      ${liftBadges(w, g)}</div>
+    <div class="goal"><div class="row"><span class="grow">🏃‍♀️ Jogging</span><span class="num"><b>${w.jogMin}</b> / ${g.jogMin} min</span></div>
+      ${jogRoad(w, st)}</div>
     <div class="row" style="margin-top:14px;flex-wrap:wrap">
       <button class="btn sm soft" data-act="quick-log" data-k="jog">+ Jog</button>
       <button class="btn sm soft" data-act="quick-log" data-k="class">+ Class</button>
       <button class="btn sm soft" data-act="watch-paste">⌚ From Watch</button></div>
-    <div class="lbl" style="margin-top:16px">Last 6 weeks <span class="faint">· line = target</span></div>
-    ${pastWeeks(ws, g)}
+    <div class="lbl" style="margin-top:16px">Medal shelf <span class="faint">· last 6 weeks</span></div>
+    ${medalShelf(ws, g)}
   </section>`;
 }
 

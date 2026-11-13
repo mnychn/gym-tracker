@@ -526,3 +526,37 @@ textarea.field { resize: vertical; font: inherit; }
 .sw.warn { background: var(--z-bad); box-shadow: inset 0 0 0 1.5px var(--warnc); }
 .map-hint { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--warnc) 14%, var(--surface)); color: var(--text-2); line-height: 1.5; }
 .map-hint .btn { display: block; margin-top: 8px; }
+/* ---- Weekly quest (gamified goals) ---- */
+.quest .pill.streak { background: color-mix(in srgb, #ff7a1a 18%, var(--surface)); color: #c2410c; }
+.q-head { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.q-medal { width: 56px; height: 56px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 32px;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--warnc) 30%, var(--surface)), var(--surface-2)); }
+.q-medal.gold { animation: q-pop .6s ease-out; box-shadow: 0 0 0 3px color-mix(in srgb, var(--warnc) 55%, transparent); }
+.q-medal.none { filter: grayscale(.4); }
+.q-score { font-size: 15px; color: var(--text-2); } .q-score b { font-size: 26px; color: var(--text); }
+.q-lv { height: 6px; border-radius: 99px; background: var(--surface-2); margin-top: 12px; overflow: hidden; }
+.q-lv span { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--warnc), #ff9f1a); }
+.quest .slot { font-size: 14px; }
+.quest .slot.done { animation: q-pop .5s ease-out; }
+.quest .slot.done b { font-size: 12px; }
+.road { position: relative; height: 18px; margin: 22px 0 2px; border-radius: 99px; background: var(--surface-2);
+  background-image: repeating-linear-gradient(90deg, transparent 0 10px, color-mix(in srgb, var(--text-3) 35%, transparent) 10px 18px);
+  background-size: 100% 2px; background-position: 0 50%; background-repeat: no-repeat; }
+.road-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; background: var(--accent); }
+.road .flag { position: absolute; top: 50%; transform: translate(-50%, -50%); font-style: normal; font-size: 12px; line-height: 1; color: var(--text-3); }
+.road .flag:not(.fin) { margin-left: -9px; }
+.road .flag.on { color: #fff; text-shadow: 0 0 2px rgba(0,0,0,.25); }
+.road .flag.fin { left: auto !important; right: -4px; transform: translateY(-50%); font-size: 16px; }
+.road .runner { position: absolute; bottom: 100%; transform: translateX(-50%) scaleX(-1); font-size: 20px; line-height: 1; margin-bottom: -4px; transition: left .6s ease; }
+.shelf { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 8px; text-align: center; }
+.shelf-c { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 0; border-radius: 10px; background: var(--surface-2); }
+.shelf-m { font-size: 24px; line-height: 1.1; } .shelf-m.none { font-size: 18px; color: var(--text-3); opacity: .6; line-height: 1.45; }
+.shelf-n { font-size: 11px; font-weight: 700; color: var(--text-2); }
+.shelf-d { font-size: 10px; color: var(--text-3); white-space: nowrap; }
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 100; overflow: hidden; }
+.confetti span { position: absolute; top: -40px; animation: q-fall 1.9s ease-in forwards; }
+@keyframes q-fall { to { transform: translateY(110vh) rotate(540deg); opacity: .2; } }
+@keyframes q-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .q-medal.gold, .quest .slot.done { animation: none; } .road .runner { transition: none; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .quest .pill.streak { color: #fdba74; } }
+:root[data-theme="dark"] .quest .pill.streak { color: #fdba74; }

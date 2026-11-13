@@ -489,3 +489,25 @@ textarea.field { resize: vertical; font: inherit; }
 .tile.pair .t-v { font-size: 13.5px; white-space: nowrap; }
 .tile.pair .t-v small { display: none; }
 .bodymap text.fatnote { font-size: 10.5px; font-weight: 600; fill: var(--warn); }
+
+/* ---- healthy-range zones: green = healthy, amber = side to work on, pale = fine ---- */
+.z.ok { background: color-mix(in srgb, var(--good) 45%, var(--surface)); }
+.z.bad { background: color-mix(in srgb, var(--warnc) 42%, var(--surface)); }
+.z.fine { background: color-mix(in srgb, var(--good) 12%, var(--surface-2)); }
+.zb { margin-bottom: 16px; }
+.zb-bar { position: relative; height: 26px; margin: 6px 0 2px; }
+.zb-bar .z { position: absolute; top: 6px; height: 14px; }
+.zb-bar .z:first-child { border-radius: 7px 0 0 7px; } .zb-bar .z:nth-child(3) { border-radius: 0 7px 7px 0; }
+.zb-bar .z.ok { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--good) 70%, transparent); }
+.zb-bar .mk { position: absolute; top: 4px; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%; border: 2px solid var(--surface);
+  font-size: 9px; font-weight: 800; line-height: 14px; text-align: center; color: #fff; z-index: 1; }
+.zb-bar .mk.good { background: var(--good); } .zb-bar .mk.warn { background: var(--warnc); color: #2a1d00; }
+.zb-bar.pair { height: 32px; } .zb-bar.pair .z { top: 9px; }
+.zb-bar.pair .mk:nth-of-type(4) { top: 0; } .zb-bar.pair .mk:nth-of-type(5) { top: 13px; }
+.zb-ax { position: relative; height: 14px; font-size: 10.5px; color: var(--text-3); }
+.zb-ax span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.zb-ax span.mid { color: var(--accent); font-weight: 650; }
+.zb-key { display: flex; gap: 14px; color: var(--text-2); margin: -2px 0 12px; }
+.zb-key i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.g-bands span.bad { background: color-mix(in srgb, var(--warnc) 30%, var(--surface-2)); }
+.g-bands span.good { background: color-mix(in srgb, var(--good) 45%, var(--surface)); }

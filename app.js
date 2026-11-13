@@ -72,7 +72,7 @@ function summarize(sets, timed) {
 
 // ---------------------------------------------------------------- storage
 // Weekly targets + body goal. Calories/protein are reminders only (not tracked).
-const GOAL_DEFAULTS = { sessions: 4, pt: 2, jogMin: 180, muscleKg: 2.5, kcal: 2150, protein: 100 };
+const GOAL_DEFAULTS = { sessions: 3, pt: 2, jogMin: 180, muscleKg: 2.5, kcal: 2150, protein: 100, scanDays: 30 };
 function defaults() {
   const seed = window.SEED || { routine: [], sessions: [] };
   return {
@@ -96,6 +96,7 @@ function migrate(d) {
   }
   if (!Array.isArray(d.scans)) d.scans = [];
   d.goals = { ...GOAL_DEFAULTS, ...(d.goals || {}) };
+  if ((d.goalsV || 1) < 2) { d.goals.sessions = 3; d.goals.scanDays = 30; d.goalsV = 2; } // 3 lifting sessions/week, monthly scans
   return d;
 }
 function load() {
@@ -206,11 +207,12 @@ function jogSecs(s) {
 }
 const weekStartOf = (d) => dayStart(d) - ((d.getDay() + 6) % 7) * 864e5; // Monday 00:00
 function weekStats(ws) {
-  const we = ws + 7 * 864e5, r = { gym: 0, pt: 0, jogMin: 0, days: [] };
+  const we = ws + 7 * 864e5, r = { gym: 0, pt: 0, jogMin: 0, days: [], classes: 0 }; // gym = weight-lifting sessions (PT + own)
   db.sessions.forEach((s) => {
     const t = new Date(s.date).getTime(); if (t < ws || t >= we) return;
     const k = kindOf(s);
-    if (isGym(k)) { r.gym += 1; r.days.push(k); }
+    if (k === 'pt' || k === 'self') { r.gym += 1; r.days.push(k); }
+    if (k === 'class') r.classes += 1;
     if (k === 'pt') r.pt += 1;
     r.jogMin += jogSecs(s) / 60;
   });
@@ -447,7 +449,7 @@ function bodyGoal(sc) {
   return { base, latest, target: base + (toNum(db.goals.muscleKg) || 0), gained: latest - base };
 }
 function nextScanText(latest) {
-  const due = new Date(latest.date).getTime() + 56 * 864e5; // every ~8 weeks
+  const due = new Date(latest.date).getTime() + (toNum(db.goals.scanDays) || 30) * 864e5; // monthly by default
   return due > Date.now() ? `due ${shortDate(due)}` : 'due now';
 }
 
@@ -684,7 +686,7 @@ function quickLogModal(kind) {
       <div style="width:96px"><label class="lbl">Minutes</label><input class="field" id="ql-min" inputmode="numeric" value="45" ${isJog ? 'autofocus' : ''}></div>
       ${isJog ? '<div style="width:96px"><label class="lbl">km <span class="faint">optional</span></label><input class="field" id="ql-km" inputmode="decimal"></div>' : ''}
     </div>
-    <p class="small muted" style="margin-top:10px">${isJog ? `Counts toward your ${db.goals.jogMin} min jogging target. Tip: you can also start the <b>Jog</b> day to use a timer.` : 'Counts as one of your weekly gym sessions.'}</p>
+    <p class="small muted" style="margin-top:10px">${isJog ? `Counts toward your ${db.goals.jogMin} min jogging target. Tip: you can also start the <b>Jog</b> day to use a timer.` : 'Saved as a class — extra to your weight-lifting target.'}</p>
     <div class="actions"><button class="btn" data-act="m:close">Cancel</button><button class="btn primary" data-act="m:save">Save</button></div>`,
   {
     close: closeModal,
@@ -804,7 +806,7 @@ function watchConfirm(w, as) {
     <label class="lbl" style="margin-top:14px">Count it as</label>
     <div class="seg full">${opt('jog', 'Jog')}${opt('class', 'Class')}${opt('gym', 'Gym')}${opt('walk', 'Other')}</div>
     <p class="small muted" style="margin-top:8px">${k === 'jog' ? `Adds ${min} min to your jogging target.`
-      : k === 'class' ? 'Counts as one of your weekly gym sessions.'
+      : k === 'class' ? 'Saved as a class — extra to your weight-lifting target.'
       : k === 'walk' ? 'Saved to History; doesn’t count toward your targets.'
       : target === 'active' ? 'Adds time, calories and heart rate to the workout you’re logging now.'
       : target !== 'new' ? `Adds time, calories and heart rate to <b>${esc(gymToday[0].dayName)}</b> from the same day.`
@@ -894,7 +896,7 @@ function sessionSlots(w, g) {
   const n = Math.max(g.sessions, w.days.length);
   const ptLeft = Math.max(0, g.pt - w.pt);
   let ptShown = 0;
-  return `<div class="slots" role="img" aria-label="${w.gym} of ${g.sessions} gym sessions done">${Array.from({ length: n }, (_, i) => {
+  return `<div class="slots" role="img" aria-label="${w.gym} of ${g.sessions} lifting sessions done">${Array.from({ length: n }, (_, i) => {
     const k = w.days[i];
     if (k) return `<span class="slot done ${k}" title="${KINDS[k]}">${ICON.check}<b>${KIND_TAG[k]}</b></span>`;
     const tag = ptShown < ptLeft ? (ptShown++, 'PT') : '';
@@ -926,7 +928,7 @@ function pastWeeks(ws, g) {
     </div></div>`;
   };
   return `<div class="pw-wrap">
-    ${chart('gym', g.sessions, (v) => plural(v, 'session'), (v) => v, 'Gym')}
+    ${chart('gym', g.sessions, (v) => plural(v, 'lifting session'), (v) => v, 'Lift')}
     ${chart('jogMin', g.jogMin, (v) => `${v} min`, (v) => (v >= 60 ? `${+(v / 60).toFixed(1)}h` : `${v}m`), 'Jog')}
     <div class="pw-row"><span class="pw-l"></span><div class="pw-x">${weeks.map((x) => `<span>${shortDate(x.s)}</span>`).join('')}</div></div>
   </div>`;
@@ -940,7 +942,7 @@ function weekCard() {
   const done = !gymLeft && !jogLeft;
   return `<section class="card week">
     <div class="row"><b class="grow">This week</b>${done ? '<span class="pill accent">✓ Targets hit</span>' : `<span class="pill num">${plural(daysLeft + 1, 'day')} left</span>`}</div>
-    <div class="goal"><div class="row"><span class="grow">Gym sessions</span><span class="num"><b>${w.gym}</b> / ${g.sessions}</span></div>
+    <div class="goal"><div class="row"><span class="grow">Weight lifting${w.classes ? ` <span class="pill">+${plural(w.classes, 'class')}</span>` : ''}</span><span class="num"><b>${w.gym}</b> / ${g.sessions}</span></div>
       ${sessionSlots(w, g)}</div>
     <div class="goal"><div class="row"><span class="grow">Jogging</span><span class="num"><b>${w.jogMin}</b> / ${g.jogMin} min</span></div>
       ${jogTrack(ws, g)}</div>
@@ -1389,24 +1391,38 @@ function scorecardViz(s) {
     ${good.length ? `<div class="sc-h good">Already optimal</div><div class="tiles">${good.map(tile).join('')}</div>` : ''}
   </div>`;
 }
-/** For the measures that need work: how far off the healthy range they are. */
-function workBars(s) {
-  const rows = scoreItems(s).filter((x) => x.st.cls === 'warn' && x.r).map((x) => {
-    const r = x.r, pts = x.keys.map((k, i) => ({ v: toNum(s[k]), tag: x.keys.length > 1 ? (i ? 'R' : 'L') : '' })).filter((p) => p.v != null);
-    const lo = Math.min(r[0], ...pts.map((p) => p.v)), hi = Math.max(r[1], ...pts.map((p) => p.v)), pad0 = (hi - lo) * 0.25 || 1;
-    const x0 = lo - pad0, x1 = hi + pad0, X = (v) => ((v - x0) / (x1 - x0)) * 100;
-    const gap = Math.max(...pts.map((p) => (p.v < r[0] ? r[0] - p.v : p.v > r[1] ? p.v - r[1] : 0)));
-    const dirUp = pts.some((p) => p.v < r[0]);
-    return `<div class="rb">
+/** Every measure with a healthy range, as a coloured zone bar:
+ *  green = healthy range, amber = the side to work on, pale = the side that's fine to be on. */
+function rangeZones(s) {
+  const items = scoreItems(s).filter((x) => x.r);
+  if (!items.length) return '';
+  const order = items.filter((x) => x.st.cls === 'warn').concat(items.filter((x) => x.st.cls !== 'warn'));
+  const rows = order.map((x) => {
+    const r = x.r, dir = FIELD[x.keys[0]][4];
+    const lowCls = dir === 'up' || dir === 'mid' ? 'bad' : 'fine', highCls = dir === 'down' || dir === 'mid' ? 'bad' : 'fine';
+    const pts = x.keys.map((k, i) => ({ v: toNum(s[k]), tag: x.keys.length > 1 ? (i ? 'R' : 'L') : '' })).filter((p) => p.v != null);
+    const w = r[1] - r[0], x0 = Math.min(r[0] - w * 0.45, ...pts.map((p) => p.v - w * 0.08)), x1 = Math.max(r[1] + w * 0.45, ...pts.map((p) => p.v + w * 0.08));
+    const X = (v) => ((v - x0) / (x1 - x0)) * 100;
+    const out = pts.map((p) => (p.v < r[0] ? r[0] - p.v : p.v > r[1] ? p.v - r[1] : 0));
+    const gap = Math.max(...out), below = pts.some((p) => p.v < r[0]);
+    const foot = x.st.cls === 'warn'
+      ? `<span class="st warn">${x.st.icon} ${below ? `+${fmtN(+gap.toFixed(2))} ${x.un} to reach healthy` : `${fmtN(+gap.toFixed(2))} ${x.un} over healthy`}</span>`
+      : `<span class="st good">✓ ${x.st.text}</span>`;
+    return `<div class="zb">
       <div class="rb-h"><span class="grow">${x.name}</span><span class="num">${x.valTxt} ${x.un}</span></div>
-      <div class="rb-track ${pts.length > 1 ? 'pair' : ''}" role="img" aria-label="${x.name} ${x.valTxt}; range ${r[0]} to ${r[1]}">
-        <span class="band" style="left:${X(r[0])}%;width:${X(r[1]) - X(r[0])}%" title="Healthy range ${r[0]}–${r[1]}"></span>
-        ${pts.map((p) => { const st = p.v < r[0] || p.v > r[1] ? 'warn' : 'good'; return `<span class="mk ${st}" style="left:${X(p.v)}%" title="${p.tag ? `${p.tag}: ` : ''}${fmtN(p.v)}">${p.tag}</span>`; }).join('')}
+      <div class="zb-bar ${pts.length > 1 ? 'pair' : ''}" role="img" aria-label="${x.name} ${x.valTxt}; healthy ${r[0]} to ${r[1]}; ${x.st.text}">
+        <span class="z ${lowCls}" style="left:0;width:${X(r[0])}%"></span>
+        <span class="z ok" style="left:${X(r[0])}%;width:${X(r[1]) - X(r[0])}%" title="Healthy ${r[0]}–${r[1]}"></span>
+        <span class="z ${highCls}" style="left:${X(r[1])}%;right:0"></span>
+        ${pts.map((p) => { const bad = (p.v < r[0] && lowCls === 'bad') || (p.v > r[1] && highCls === 'bad'); return `<span class="mk ${bad ? 'warn' : 'good'}" style="left:${X(p.v)}%" title="${p.tag ? `${p.tag}: ` : ''}${fmtN(p.v)}">${p.tag}</span>`; }).join('')}
       </div>
-      <div class="rb-f"><span class="st warn">${x.st.icon} ${dirUp ? `+${fmtN(+gap.toFixed(2))} ${x.un} to reach range` : `${fmtN(+gap.toFixed(2))} ${x.un} over range`}</span><span class="num faint">range ${r[0]}–${r[1]}</span></div>
+      <div class="zb-ax num"><span style="left:${X(r[0])}%">${r[0]}</span><span class="mid" style="left:${(X(r[0]) + X(r[1])) / 2}%">healthy</span><span style="left:${X(r[1])}%">${r[1]}</span></div>
+      <div class="rb-f">${foot}</div>
     </div>`;
   });
-  return rows.length ? `<div class="viz-block"><div class="viz-h"><b>How far off</b><span class="small faint">grey band = healthy range</span></div>${rows.join('')}</div>` : '';
+  return `<div class="viz-block"><div class="viz-h"><b>Healthy ranges</b></div>
+    <div class="zb-key small"><span><i class="z ok"></i>Healthy</span><span><i class="z bad"></i>Work on</span><span><i class="z fine"></i>Fine</span></div>
+    ${rows.join('')}</div>`;
 }
 /** A value on a banded scale (BWI, WHO body fat, visceral level, bio age). */
 function gauge(title, v, bands, min, max, fmt, note) {
@@ -1415,7 +1431,7 @@ function gauge(title, v, bands, min, max, fmt, note) {
   return `<div class="gauge">
     <div class="rb-h"><span class="grow">${title}</span><span class="num"><b>${fmt(v)}</b></span></div>
     <div class="g-bands" role="img" aria-label="${title}: ${fmt(v)}, ${cur.label}">
-      ${bands.map((b) => `<span class="${b.good ? 'good' : ''} ${b === cur ? 'cur' : ''}" style="left:${X(b.from)}%;width:${X(b.to) - X(b.from)}%"><em>${b.label}</em></span>`).join('')}
+      ${bands.map((b) => `<span class="${b.good ? 'good' : 'bad'} ${b === cur ? 'cur' : ''}" style="left:${X(b.from)}%;width:${X(b.to) - X(b.from)}%"><em>${b.label}</em></span>`).join('')}
       <i class="g-mk ${cur.good ? 'good' : 'warn'}" style="left:${X(v)}%"></i>
     </div>
     <div class="small muted">${cur.good ? '✓' : '▼'} ${cur.label}${note ? ` · ${note}` : ''}</div>
@@ -1507,7 +1523,7 @@ function bodyView() {
       ${goalTrack(g)}${paceChart(sc, g)}</div>` : '';
   const overview = `<div class="card">
       <div class="row"><b class="grow">Latest scan</b><span class="small muted">${fmtDate(latest.date)}</span></div>
-      ${scorecardViz(latest)}${compositionViz(latest, sc.length > 1 ? sc[0] : null)}${workBars(latest)}${bodyMapViz(latest)}${gaugesViz(latest)}
+      ${scorecardViz(latest)}${compositionViz(latest, sc.length > 1 ? sc[0] : null)}${rangeZones(latest)}${bodyMapViz(latest)}${gaugesViz(latest)}
     </div>`;
   return {
     title,
@@ -1732,7 +1748,7 @@ views.settings = () => {
     </div>
     <div class="section-title">Goals</div>
     <div class="card flush">
-      ${[['sessions', 'Gym sessions a week', 'PT days + your own sessions + classes'], ['pt', 'PT sessions a week', ''],
+      ${[['sessions', 'Weight-lifting sessions a week', 'PT + your own sessions (classes are extra)'], ['pt', 'PT sessions a week', ''], ['scanDays', 'Body scan every (days)', '30 = monthly'],
         ['jogMin', 'Jogging minutes a week', '180 = 3 hours. If you’re new to jogging, build up ~15 min a week'],
         ['muscleKg', 'Muscle to gain (kg)', 'Added to your first body scan’s skeletal muscle'],
         ['kcal', 'Calories a day', 'Reminder only'], ['protein', 'Protein a day (g)', 'Reminder only']]

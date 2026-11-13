@@ -965,6 +965,128 @@ function muscleCard() {
     </div><span class="chev faint">${ICON.chev}</span></button>`;
 }
 
+// ---------------------------------------------------------------- membership & PT pack
+// Stored only on the device (db.membership). Notice deadline = end of term minus the notice period.
+const isoDay = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+const dayFrom = (iso) => { const [y, m, d] = String(iso).split('-').map(Number); return new Date(y, m - 1, d).getTime(); };
+const longDate = (t) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+function memInfo() {
+  const m = db.membership; if (!m || !m.start) return null;
+  const s = new Date(dayFrom(m.start));
+  const end = new Date(s.getFullYear(), s.getMonth() + (toNum(m.months) || 0), s.getDate()).getTime();
+  const deadline = end - (toNum(m.noticeDays) || 0) * 864e5;
+  const today = dayStart(new Date());
+  const daysToDeadline = Math.round((deadline - today) / 864e5), daysToEnd = Math.round((end - today) / 864e5);
+  const ptFrom = dayFrom(m.ptStart || m.start);
+  const ptLogged = db.sessions.filter((x) => kindOf(x) === 'pt' && new Date(x.date).getTime() >= ptFrom).length;
+  const ptUsed = Math.max(0, ptLogged + (toNum(m.ptAdjust) || 0)), ptTotal = toNum(m.ptTotal) || 0, ptLeft = Math.max(0, ptTotal - ptUsed);
+  const perWeek = Math.max(1, toNum(db.goals.pt) || 2);
+  const ptOut = ptLeft ? today + Math.ceil(ptLeft / perWeek) * 7 * 864e5 : null;
+  return { m, start: s.getTime(), end, deadline, today, daysToDeadline, daysToEnd, ptUsed, ptLeft, ptTotal, ptOut, perWeek };
+}
+const memUrgent = (i) => i && !i.m.decision && i.daysToDeadline <= 14 && i.daysToDeadline >= 0;
+
+/** Timeline: start → notice deadline → end of term, with today marked. */
+function memTimeline(i) {
+  const span = i.end - i.start || 1, X = (t) => Math.max(0, Math.min(100, ((t - i.start) / span) * 100));
+  return `<div class="mtl" role="img" aria-label="Membership ${longDate(i.start)} to ${longDate(i.end)}; notice deadline ${longDate(i.deadline)}">
+      <div class="mtl-bar"><span style="width:${X(i.today)}%"></span>
+        <i class="mtl-notice" style="left:${X(i.deadline)}%"></i>
+        ${i.today >= i.start && i.today <= i.end ? `<b class="mtl-today" style="left:${X(i.today)}%">Today</b>` : ''}</div>
+      <div class="mtl-lab"><span>${shortDate(i.start)}<br><em>Start</em></span>
+        <span class="n" style="left:${X(i.deadline)}%">${shortDate(i.deadline)}<br><em>Notify by</em></span>
+        <span class="e">${shortDate(i.end)}<br><em>Ends</em></span></div>
+    </div>`;
+}
+/** PT pack as a grid of squares: filled = used. */
+function ptGrid(i) {
+  if (!i.ptTotal) return '';
+  return `<div class="ptg" role="img" aria-label="${i.ptUsed} of ${i.ptTotal} PT sessions used">${Array.from({ length: i.ptTotal }, (_, k) =>
+    `<span class="${k < i.ptUsed ? 'on' : ''}" title="Session ${k + 1}${k < i.ptUsed ? ' — used' : ''}"></span>`).join('')}</div>`;
+}
+function membershipCard() {
+  const i = memInfo();
+  if (!i) {
+    return `<button class="card day-card" data-act="mem-edit"><div class="grow"><div class="title">Membership &amp; PT pack</div>
+      <div class="sub">Track your PT sessions and the date you must give notice by</div></div><span class="chev faint">${ICON.chev}</span></button>`;
+  }
+  const d = i.m.decision;
+  let status;
+  if (d === 'cancel') status = `<span class="pill">✓ Cancel notice given${i.m.decisionDate ? ` ${shortDate(dayFrom(i.m.decisionDate))}` : ''}</span>`;
+  else if (d === 'continue') status = '<span class="pill accent">✓ Continuing</span>';
+  else if (i.daysToDeadline < 0) status = '<span class="pill">Notice date passed — it continues</span>';
+  else status = `<span class="pill ${i.daysToDeadline <= 14 ? 'warnpill' : ''} num">${i.daysToDeadline <= 14 ? '⚠ ' : ''}${i.daysToDeadline === 0 ? 'Notify today' : `${i.daysToDeadline} days to decide`}</span>`;
+  return `<section class="card mem ${memUrgent(i) ? 'urgent' : ''}">
+    <div class="row"><b class="grow">Membership</b>${status}</div>
+    ${memTimeline(i)}
+    ${!d && i.daysToDeadline >= 0 ? `<div class="small muted" style="margin-top:8px">To stop after ${longDate(i.end)}, tell the gym on or before <b style="color:var(--text)">${longDate(i.deadline)}</b>.</div>` : ''}
+    <div class="row" style="margin-top:10px;flex-wrap:wrap">
+      ${!d && i.daysToDeadline >= 0 ? '<button class="btn sm soft" data-act="mem-ics">📅 Add reminders</button><button class="btn sm ghost" data-act="mem-decide">I’ve decided…</button>' : ''}
+      <button class="btn sm ghost" data-act="mem-edit">Edit</button></div>
+    ${i.ptTotal ? `<div class="goal" style="margin-top:14px"><div class="row"><span class="grow">PT sessions</span><span class="num"><b>${i.ptLeft}</b> left of ${i.ptTotal}</span></div>
+      ${ptGrid(i)}
+      <div class="small muted">${i.ptLeft ? `At ${i.perWeek}/week the pack runs out ~${shortDate(i.ptOut)}${i.ptOut > i.deadline && !d ? ' — after your notice date' : ''}.` : 'All PT sessions used.'}</div></div>` : ''}
+  </section>`;
+}
+function memModal() {
+  const m = db.membership || {};
+  openModal(`<div class="row"><h3 class="grow">Membership &amp; PT pack</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
+    <p class="small muted">Stored only on this device.</p>
+    <div class="scan-grid">
+      <div><label class="lbl">Membership start</label><input type="date" class="field" id="mm-start" value="${esc(m.start || '')}"></div>
+      <div><label class="lbl">Length (months)</label><input class="field" id="mm-months" inputmode="numeric" value="${esc(m.months ?? 3)}"></div>
+      <div><label class="lbl">Notice needed (days)</label><input class="field" id="mm-notice" inputmode="numeric" value="${esc(m.noticeDays ?? 30)}"></div>
+      <div><label class="lbl">PT sessions bought</label><input class="field" id="mm-pt" inputmode="numeric" value="${esc(m.ptTotal ?? '')}" placeholder="e.g. 20"></div>
+      <div><label class="lbl">PT pack start</label><input type="date" class="field" id="mm-ptstart" value="${esc(m.ptStart || m.start || '')}"></div>
+      <div><label class="lbl">PT used, not logged</label><input class="field" id="mm-adj" inputmode="numeric" value="${esc(m.ptAdjust ?? 0)}"></div>
+    </div>
+    <p class="small faint" style="margin-top:8px">PT sessions count automatically from workouts logged as “With PT” from the pack start. Use “used, not logged” for any you didn’t log.</p>
+    <div class="actions">${db.membership ? '<button class="btn danger" data-act="m:del">Remove</button>' : '<button class="btn" data-act="m:close">Cancel</button>'}<button class="btn primary" data-act="m:save">Save</button></div>`,
+  {
+    close: closeModal,
+    del: () => { db.membership = null; save(); closeModal(); renderView(); },
+    save: () => {
+      const start = $('#mm-start').value; if (!start) { toast('Enter the start date'); return; }
+      db.membership = { ...(db.membership || {}), start, months: toNum($('#mm-months').value) || 1, noticeDays: toNum($('#mm-notice').value) ?? 0,
+        ptTotal: toNum($('#mm-pt').value) || 0, ptStart: $('#mm-ptstart').value || start, ptAdjust: toNum($('#mm-adj').value) || 0 };
+      save(); closeModal(); toast('Saved'); renderView();
+    },
+  });
+}
+function memDecide() {
+  const i = memInfo();
+  openModal(`<h3>Membership decision</h3>
+    <p class="muted">Your current term ends ${longDate(i.end)}. Notice is due by ${longDate(i.deadline)}.</p>
+    <div class="stack" style="margin-top:12px">
+      <button class="btn big primary" data-act="m:keep">I’m continuing</button>
+      <button class="btn big" data-act="m:cancel">I’ve given notice to cancel</button>
+      <button class="btn big ghost" data-act="m:close">Not yet</button></div>`,
+  {
+    close: closeModal,
+    keep: () => { db.membership.decision = 'continue'; db.membership.decisionDate = isoDay(Date.now()); save(); closeModal(); renderView(); },
+    cancel: () => { db.membership.decision = 'cancel'; db.membership.decisionDate = isoDay(Date.now()); save(); closeModal(); renderView(); },
+  });
+}
+/** Calendar file: a heads-up 7 days before the notice date and one on the day (9 am, with alerts). */
+function memIcs() {
+  const i = memInfo(); if (!i) return;
+  const ymd = (t) => isoDay(t).replace(/-/g, '');
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  const ev = (t, title, desc, id) => ['BEGIN:VEVENT', `UID:${id}-${ymd(t)}@gym-log`, `DTSTAMP:${stamp}`, `DTSTART:${ymd(t)}T090000`, `DTEND:${ymd(t)}T093000`,
+    `SUMMARY:${title}`, `DESCRIPTION:${desc}`, 'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${title}`, 'TRIGGER:-PT0M', 'END:VALARM', 'END:VEVENT'];
+  const desc = `Gym membership ends ${longDate(i.end)}. To cancel\\, give notice by ${longDate(i.deadline)}.`;
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Gym Log//EN', 'CALSCALE:GREGORIAN',
+    ...ev(i.deadline - 7 * 864e5, 'Decide: keep gym membership? (notice due in 7 days)', desc, 'mem-wk'),
+    ...ev(i.deadline, 'Last day to give gym membership notice', desc, 'mem-day'), 'END:VCALENDAR'];
+  const file = new File([lines.join('\r\n')], 'gym-membership-reminders.ics', { type: 'text/calendar' });
+  const url = URL.createObjectURL(file), a = document.createElement('a');
+  a.href = url;
+  if (!/iPhone|iPad/i.test(navigator.userAgent)) a.download = file.name; // iPhone opens it straight into Calendar
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toast('Opening calendar reminders…');
+}
+
 function idleView() {
   const nd = nextDay();
   const last = nd && lastDoneOf(nd.id);
@@ -998,10 +1120,12 @@ function idleView() {
     title: '<h1>Train</h1>',
     body: `<div class="stack">
       ${notice}
+      ${memUrgent(memInfo()) ? membershipCard() : ''}
       ${weekCard()}
       ${hero}
     </div>
     ${others ? `<div class="section-title">Other days</div><div class="stack">${others}</div>` : ''}
+    ${memUrgent(memInfo()) ? '' : `<div class="section-title">Membership</div><div class="stack">${membershipCard()}</div>`}
     <div class="section-title">Body</div>
     <div class="stack">${muscleCard()}</div>
     <div class="section-title">More</div>
@@ -1484,6 +1608,8 @@ views.settings = () => {
         <label class="btn sm" style="position:relative;overflow:hidden">Import<input type="file" accept="application/json,.json" data-bind="import" style="position:absolute;inset:0;opacity:0"></label></div>
       <div class="setting"><div class="grow"><div>Reset everything</div><div class="small muted">Erase history and restore the original routine</div></div><button class="btn sm danger" data-act="reset">Reset</button></div>
     </div>
+    <div class="section-title">Membership</div>
+    <div class="card flush"><div class="setting"><div class="grow"><div>Membership &amp; PT pack</div><div class="small muted">${memInfo() ? `Ends ${longDate(memInfo().end)} · notice by ${longDate(memInfo().deadline)}` : 'Not set up'}</div></div><button class="btn sm" data-act="mem-edit">${memInfo() ? 'Edit' : 'Set up'}</button></div></div>
     <div class="section-title">Apple Watch</div>
     <div class="card flush">
       <div class="setting"><div class="grow"><div>Connect Apple Watch workouts</div><div class="small muted">Free Shortcut that copies each finished workout for Gym Log</div></div><button class="btn sm" data-act="watch-setup">Set up</button></div>
@@ -1720,6 +1846,9 @@ document.addEventListener('click', async (ev) => {
     case 'quick-log': quickLogModal(t.dataset.k); break;
     case 'watch-paste': pasteFromWatch(); break;
     case 'watch-setup': watchSetup(); break;
+    case 'mem-edit': memModal(); break;
+    case 'mem-decide': memDecide(); break;
+    case 'mem-ics': memIcs(); break;
     case 'dismiss-plan': db.planNotice = false; save(); renderView(); break;
     case 'swap-routine':
       if (await confirmBox({ title: 'Swap routines?', body: 'Your current routine is kept, so you can swap back here any time. History isn’t affected.', ok: 'Swap' })) {
@@ -1963,6 +2092,7 @@ function importData(file) {
       merge: () => {
         db.sessions = db.sessions.concat(d.sessions.filter((s) => !db.sessions.some((x) => x.id === s.id)));
         db.scans = db.scans.concat(scans.filter((s) => !db.scans.some((x) => x.id === s.id)));
+        if (d.membership && !db.membership) db.membership = d.membership;
         if (!keepRoutine) { db.routine = d.routine; if (d.plan) db.plan = d.plan; }
         save(); closeModal(); toast(`Imported ${fresh} workouts, ${freshScans} scans`); render();
       },

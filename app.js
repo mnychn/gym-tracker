@@ -407,7 +407,19 @@ const BODY = [
 const SCAN_FIELDS = [
   ['weight', 'Weight', 'w'], ['smm', 'Skeletal muscle', 'w'], ['fat', 'Body fat', '%'], ['lbm', 'Lean body mass', 'w'],
   ['armL', 'Left arm lean', 'w'], ['armR', 'Right arm lean', 'w'], ['legL', 'Left leg lean', 'w'], ['legR', 'Right leg lean', 'w'],
+  ['torso', 'Torso lean', 'w'],
 ];
+const fmtRange = (r) => (r ? `${r[0]}–${r[1]}` : '');
+function parseRange(v) {
+  const m = String(v || '').replace(/,/g, '.').match(/(\d+(?:\.\d+)?)\s*[-–—to]+\s*(\d+(?:\.\d+)?)/);
+  return m && +m[1] < +m[2] ? [+m[1], +m[2]] : null;
+}
+/** The healthy range for a measure: from this scan, else the most recent earlier scan that has one. */
+function rangeFor(k, upTo) {
+  const sc = sortedScans().filter((s) => !upTo || s.date <= upTo.date).reverse();
+  for (const s of sc) if (s.ranges && s.ranges[k]) return s.ranges[k];
+  return null;
+}
 function bodyVal(s, k) {
   if (k === 'arms') return avg2(s.armL, s.armR);
   if (k === 'legs') return avg2(s.legL, s.legR);
@@ -470,13 +482,29 @@ const SCAN_LABELS = {
   weight: [/\bWEIGHT\b/i, 25, 250], lbm: [/LEAN\s*BODY\s*MASS/i, 15, 120], smm: [/SKELETAL\s*MUSCLE/i, 8, 80],
   fat: [/BODY\s*FAT\s*(PERCENT|%)|PERCENT\s*BODY\s*FAT|PBF/i, 3, 70],
   armL: [/LEFT\s*ARM/i, 0.3, 8], armR: [/RIGHT\s*ARM/i, 0.3, 8], legL: [/LEFT\s*LEG/i, 1.5, 25], legR: [/RIGHT\s*LEG/i, 1.5, 25],
+  torso: [/\bTORSO\b/i, 5, 60],
 };
 /** words: [{t, x, y}] with x/y as fractions of image width. Returns {fields, date}. */
 function parseScanWords(words, lines, valueWords = []) {
-  const out = {};
+  const out = {}, ranges = {};
+  const leftPanel = (k) => /^(armL|legL|torso)$/.test(k); // these labels sit right of their value on the sheet
+  // reference range printed after a value, e.g. "[36.6 - 44.8]" — OCR often drops dots, so rescale and sanity-check
+  const rangeAfter = (pick) => {
+    const fitR = (x) => { for (const f of [1, 0.1, 0.01]) { if (x * f >= pick.v * 0.4 && x * f <= pick.v * 2.5) return +(x * f).toFixed(2); } return null; };
+    for (const src of [valueWords, words]) {
+      const txt = src.filter((w) => Math.abs(w.y - pick.y) < 0.012 && w.x > pick.x + 0.01 && w.x < pick.x + 0.24)
+        .sort((p, q) => p.x - q.x).map((w) => w.t).join(' ').replace(/,/g, '.');
+      for (const m of txt.matchAll(/(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)/g)) {
+        const lo = fitR(+m[1]), hi = fitR(+m[2]);
+        const dp = pick.dp || 1, rd = (x) => +x.toFixed(dp);
+        if (lo && hi && hi / lo > 1.05 && hi / lo < 1.7) return [rd(lo), rd(hi)];
+      }
+    }
+    return null;
+  };
   const toNums = (ws) => ws.map((w) => {
     const m = w.t.replace(',', '.').match(/^(\d{1,3}(?:\.\d{1,2})?)%?\/?$/); // ranges like [36.6 or (1.98 don't match
-    return m && (m[1].includes('.') || +m[1] >= 100) ? { v: +m[1], x: w.x, y: w.y } : null; // scan values have decimals (or lost their dot)
+    return m && (m[1].includes('.') || +m[1] >= 100) ? { v: +m[1], dp: (m[1].split('.')[1] || '').length, x: w.x, y: w.y } : null; // scan values have decimals (or lost their dot)
   }).filter(Boolean);
   const primary = toNums(valueWords);
   const nums = primary.concat(toNums(words).filter((n) => !primary.some((q) => Math.abs(q.x - n.x) < 0.02 && Math.abs(q.y - n.y) < 0.01)));
@@ -489,13 +517,13 @@ function parseScanWords(words, lines, valueWords = []) {
       for (const w of ln.words) { if (pos + w.t.length >= m.index) { lw = w; break; } pos += w.t.length + 1; }
       const below = nums.filter((n) => n.y > lw.y + 0.004 && n.y < lw.y + 0.06);
       let cand;
-      if (/^(armL|legL)$/.test(k)) cand = below.filter((n) => n.x < lw.x).sort((a, b) => a.y - b.y || a.x - b.x);
+      if (leftPanel(k)) cand = below.filter((n) => n.x < lw.x).sort((a, b) => a.y - b.y || a.x - b.x);
       else cand = below.filter((n) => n.x > lw.x - 0.09 && n.x < lw.x + 0.12).sort((a, b) => a.y - b.y || a.x - b.x);
       if (cand.length) {
         const rowY = cand[0].y, row = cand.filter((n) => Math.abs(n.y - rowY) < 0.012);
-        const pick = /^(armL|legL)$/.test(k) ? row.sort((a, b) => a.x - b.x)[0] : row.sort((a, b) => Math.abs(a.x - lw.x) - Math.abs(b.x - lw.x))[0];
+        const pick = leftPanel(k) ? row.sort((a, b) => a.x - b.x)[0] : row.sort((a, b) => Math.abs(a.x - lw.x) - Math.abs(b.x - lw.x))[0];
         const v = fit(pick.v, lo, hi);
-        if (v != null) { out[k] = v; break; }
+        if (v != null) { out[k] = v; const r = rangeAfter({ ...pick, v }); if (r) ranges[k] = r; break; }
       }
     }
   });
@@ -509,7 +537,16 @@ function parseScanWords(words, lines, valueWords = []) {
     if (mon > 12 && day <= 12) [day, mon] = [mon, day];
     if (mon >= 1 && mon <= 12 && day >= 1 && day <= 31) date = `${dm[3]}-${pad(mon)}-${pad(day)}`;
   }
-  return { fields: out, date };
+  // left and right share one range on the sheet: keep whichever reading sits closest to both values
+  [['armL', 'armR'], ['legL', 'legR']].forEach(([l, r]) => {
+    const cands = [ranges[l], ranges[r]].filter(Boolean);
+    if (!cands.length) return;
+    const vals = [out[l], out[r]].filter((v) => v != null);
+    const dist = (rg) => vals.reduce((t, v) => t + (v < rg[0] ? rg[0] - v : v > rg[1] ? v - rg[1] : 0), 0);
+    const best = cands.sort((p, q) => dist(p) - dist(q))[0];
+    ranges[l] = best; ranges[r] = best;
+  });
+  return { fields: out, ranges, date };
 }
 async function readScanFile(file, onProgress) {
   const img = await fileImage(file);
@@ -542,6 +579,7 @@ async function onScanUpload(file) {
     document.querySelectorAll('.scan-grid .field.filled, #sc-date.filled').forEach((e) => e.classList.remove('filled'));
     got.forEach((k) => { const e = $(`#sc-${k}`); if (e) { e.value = res.fields[k]; e.classList.add('filled'); } });
     if (res.date) { $('#sc-date').value = res.date; $('#sc-date').classList.add('filled'); }
+    Object.entries(res.ranges || {}).forEach(([k, r]) => { const e = $(`#sr-${k}`); if (e && !e.value) { e.value = fmtRange(r); e.classList.add('filled'); } });
     const missing = SCAN_FIELDS.filter(([k]) => !got.includes(k)).map(([, l]) => l);
     say(got.length
       ? `<b>Read ${got.length} value${got.length === 1 ? '' : 's'}</b> (highlighted). Check them — and the date — against your sheet before saving.${missing.length ? `<br><span class="faint">Not found: ${missing.join(', ')}.</span>` : ''}`
@@ -557,6 +595,7 @@ function scanModal(scan) {
   const s = scan ? clone(scan) : { id: uid(), date: localISO(now) };
   const d = new Date(s.date);
   const u = (x) => (x === 'w' ? unit() : x);
+  const rng = (k) => (s.ranges && s.ranges[k]) || (isNew ? rangeFor(k) : null);
   openModal(`
     <div class="row"><h3 class="grow">${isNew ? 'Add body scan' : 'Edit body scan'}</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
     <label class="btn soft big upload" style="margin-top:6px">📷 Upload scan photo or screenshot
@@ -564,7 +603,9 @@ function scanModal(scan) {
     <p class="small muted" id="sc-status" style="margin-top:8px">Reads the numbers on your phone — the image isn’t uploaded anywhere. Or type them in below.</p>
     <div style="margin-top:10px"><label class="lbl">Date</label><input type="date" class="field" id="sc-date" value="${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}"></div>
     <div class="scan-grid">${SCAN_FIELDS.map(([k, l, un]) => `<div><label class="lbl">${l} <span class="faint">${u(un)}</span></label>
-      <input class="field" id="sc-${k}" value="${esc(s[k] ?? '')}" inputmode="decimal"></div>`).join('')}</div>
+      <input class="field" id="sc-${k}" value="${esc(s[k] ?? '')}" inputmode="decimal">
+      ${k === 'weight' ? '' : `<input class="field range" id="sr-${k}" value="${esc(fmtRange(rng(k)))}" placeholder="Healthy range, e.g. 20.3–24.8" aria-label="${l} healthy range">`}</div>`).join('')}</div>
+    <p class="small faint" style="margin-top:6px">Healthy ranges are the numbers in [brackets] on your sheet — they’re carried over from your last scan.</p>
     <div style="margin-top:10px"><label class="lbl">Notes</label><input class="field" id="sc-notes" value="${esc(s.notes || '')}" placeholder="e.g. Evolt 360, morning, before eating"></div>
     <div class="actions">${isNew ? '<button class="btn" data-act="m:close">Cancel</button>' : '<button class="btn danger" data-act="m:del">Delete</button>'}
       <button class="btn primary" data-act="m:save">Save</button></div>`,
@@ -577,6 +618,8 @@ function scanModal(scan) {
       const dv = $('#sc-date').value;
       if (dv) { const [y, m, dd] = dv.split('-').map(Number); s.date = localISO(new Date(y, m - 1, dd, 8)); }
       SCAN_FIELDS.forEach(([k]) => { const v = toNum($(`#sc-${k}`).value); if (v == null) delete s[k]; else s[k] = v; });
+      s.ranges = {};
+      SCAN_FIELDS.forEach(([k]) => { const e = $(`#sr-${k}`), r = e && parseRange(e.value); if (r) s.ranges[k] = r; });
       s.notes = $('#sc-notes').value.trim();
       if (s.weight == null && s.smm == null) { toast('Enter at least weight or skeletal muscle'); return; }
       const i = db.scans.findIndex((x) => x.id === s.id);
@@ -803,40 +846,108 @@ views.train = () => (db.active ? activeView() : idleView());
 
 const meter = (v, max) => `<div class="meter" role="presentation"><span style="width:${Math.max(0, Math.min(100, max ? (v / max) * 100 : 0))}%"></span></div>`;
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const KIND_TAG = { pt: 'PT', self: 'Own', class: 'Class' };
+
+/** Gym sessions as slots: filled = done (labelled by type), empty = still to do. */
+function sessionSlots(w, g) {
+  const n = Math.max(g.sessions, w.days.length);
+  const ptLeft = Math.max(0, g.pt - w.pt);
+  let ptShown = 0;
+  return `<div class="slots" role="img" aria-label="${w.gym} of ${g.sessions} gym sessions done">${Array.from({ length: n }, (_, i) => {
+    const k = w.days[i];
+    if (k) return `<span class="slot done ${k}" title="${KINDS[k]}">${ICON.check}<b>${KIND_TAG[k]}</b></span>`;
+    const tag = ptShown < ptLeft ? (ptShown++, 'PT') : '';
+    return `<span class="slot" title="To do${tag ? ' — with PT' : ''}"><b>${tag}</b></span>`;
+  }).join('')}</div>`;
+}
+/** Jogging: one segment per run on a track to the target, ticks every hour. */
+function jogTrack(ws, g) {
+  const runs = db.sessions.filter((s) => { const t = new Date(s.date).getTime(); return t >= ws && t < ws + 7 * 864e5; })
+    .map((s) => ({ m: jogSecs(s) / 60, d: s.date })).filter((r) => r.m > 0).sort((a, b) => (a.d < b.d ? -1 : 1));
+  const total = runs.reduce((t, r) => t + r.m, 0), max = Math.max(g.jogMin, total);
+  const ticks = []; for (let h = 60; h < max; h += 60) ticks.push(h);
+  return `<div class="jogtrack" role="img" aria-label="${Math.round(total)} of ${g.jogMin} minutes jogging">
+      ${runs.map((r) => `<span class="run" style="width:${(r.m / max) * 100}%" title="${shortDate(r.d)}: ${Math.round(r.m)} min"></span>`).join('')}
+      ${ticks.map((h) => `<i class="tick" style="left:${(h / max) * 100}%"></i>`).join('')}
+      ${g.jogMin < max ? `<i class="tick goal" style="left:${(g.jogMin / max) * 100}%"></i>` : ''}
+    </div>
+    <div class="jogscale">${ticks.concat(g.jogMin >= max ? [g.jogMin] : []).map((h) => `<span style="left:${(h / max) * 100}%">${h % 60 ? h + 'm' : h / 60 + 'h'}</span>`).join('')}</div>`;
+}
+/** Last 6 weeks as two small bar charts (gym sessions, jog minutes), each with its target line. */
+function pastWeeks(ws, g) {
+  const weeks = [6, 5, 4, 3, 2, 1].map((i) => { const s = ws - i * 7 * 864e5; return { s, ...weekStats(s) }; });
+  const chart = (key, target, fmt, short, label) => {
+    const max = Math.max(target, ...weeks.map((x) => x[key])) || 1;
+    return `<div class="pw-row"><span class="pw-l">${label}</span><div class="pw" role="img" aria-label="${label} per week, target ${fmt(target)}">
+      <i class="tgt" style="bottom:${(target / max) * 100}%"></i>
+      ${weeks.map((x) => { const v = x[key]; return `<div class="pw-c" title="Week of ${shortDate(x.s)}: ${fmt(v)}">
+        <span class="bar ${v >= target ? 'hit' : ''}" style="height:${(v / max) * 100}%"><em>${v ? short(v) : ''}</em></span></div>`; }).join('')}
+    </div></div>`;
+  };
+  return `<div class="pw-wrap">
+    ${chart('gym', g.sessions, (v) => plural(v, 'session'), (v) => v, 'Gym')}
+    ${chart('jogMin', g.jogMin, (v) => `${v} min`, (v) => (v >= 60 ? `${+(v / 60).toFixed(1)}h` : `${v}m`), 'Jog')}
+    <div class="pw-row"><span class="pw-l"></span><div class="pw-x">${weeks.map((x) => `<span>${shortDate(x.s)}</span>`).join('')}</div></div>
+  </div>`;
+}
 
 /** This week's targets: gym sessions (PT + own/class) and jogging minutes, plus the last 6 weeks. */
 function weekCard() {
   const g = db.goals, now = new Date(), ws = weekStartOf(now), w = weekStats(ws);
   const daysLeft = 6 - ((now.getDay() + 6) % 7);
   const gymLeft = Math.max(0, g.sessions - w.gym), jogLeft = Math.max(0, g.jogMin - w.jogMin);
-  let hint;
-  if (!gymLeft && !jogLeft) hint = '<b style="color:var(--accent)">Both weekly targets hit.</b> Nice work.';
-  else {
-    const todo = [];
-    if (gymLeft) todo.push(plural(gymLeft, 'gym session'));
-    if (jogLeft) todo.push(`${jogLeft} min jogging${jogLeft > 60 ? ` (≈ ${Math.ceil(jogLeft / 60)} × ${Math.round(jogLeft / Math.ceil(jogLeft / 60) / 5) * 5} min)` : ''}`);
-    hint = `To go: ${todo.join(' · ')} — ${daysLeft ? `${plural(daysLeft, 'day')} left after today` : 'last day of the week'}`;
-  }
-  const past = [6, 5, 4, 3, 2, 1].map((i) => {
-    const s = ws - i * 7 * 864e5, st = weekStats(s);
-    const hit = st.gym >= g.sessions && st.jogMin >= g.jogMin;
-    return `<div class="wk ${hit ? 'hit' : ''}" title="Week of ${shortDate(s)}: ${st.gym} gym sessions, ${st.jogMin} min jogging">
-      <span class="wk-d">${shortDate(s)}</span><span class="num">${st.gym}/${g.sessions}</span><span class="num">${st.jogMin}m</span></div>`;
-  }).join('');
+  const done = !gymLeft && !jogLeft;
   return `<section class="card week">
-    <div class="row"><b class="grow">This week</b><span class="small muted num">${shortDate(ws)} – ${shortDate(ws + 6 * 864e5)}</span></div>
+    <div class="row"><b class="grow">This week</b>${done ? '<span class="pill accent">✓ Targets hit</span>' : `<span class="pill num">${plural(daysLeft + 1, 'day')} left</span>`}</div>
     <div class="goal"><div class="row"><span class="grow">Gym sessions</span><span class="num"><b>${w.gym}</b> / ${g.sessions}</span></div>
-      ${meter(w.gym, g.sessions)}<div class="small muted">PT ${w.pt}/${g.pt}${w.days.length ? ` · ${w.days.map((k) => KINDS[k]).join(', ')}` : ''}</div></div>
+      ${sessionSlots(w, g)}</div>
     <div class="goal"><div class="row"><span class="grow">Jogging</span><span class="num"><b>${w.jogMin}</b> / ${g.jogMin} min</span></div>
-      ${meter(w.jogMin, g.jogMin)}</div>
-    <div class="small muted" style="margin-top:10px">${hint}</div>
-    <div class="row" style="margin-top:12px;flex-wrap:wrap">
-      <button class="btn sm soft" data-act="quick-log" data-k="jog">+ Log a jog</button>
-      <button class="btn sm soft" data-act="quick-log" data-k="class">+ Log a class</button>
-      <button class="btn sm soft" data-act="watch-paste">⌚ Paste from Watch</button></div>
-    <div class="lbl" style="margin-top:14px">Past weeks <span class="faint">· gym / jog</span></div>
-    <div class="wks">${past}</div>
+      ${jogTrack(ws, g)}</div>
+    <div class="row" style="margin-top:14px;flex-wrap:wrap">
+      <button class="btn sm soft" data-act="quick-log" data-k="jog">+ Jog</button>
+      <button class="btn sm soft" data-act="quick-log" data-k="class">+ Class</button>
+      <button class="btn sm soft" data-act="watch-paste">⌚ From Watch</button></div>
+    <div class="lbl" style="margin-top:16px">Last 6 weeks <span class="faint">· line = target</span></div>
+    ${pastWeeks(ws, g)}
   </section>`;
+}
+
+/** Muscle goal as a track: start → now → goal with 0.5 kg milestones. */
+function goalTrack(g) {
+  const span = toNum(db.goals.muscleKg) || 1, pct = Math.max(0, Math.min(100, (g.gained / span) * 100));
+  const steps = []; for (let s = 0.5; s < span - 1e-6; s += 0.5) steps.push(s);
+  return `<div class="gtrack" role="img" aria-label="Skeletal muscle ${fmt1(g.latest)} of goal ${fmt1(g.target)} ${unit()}">
+      <div class="gbar"><span style="width:${pct}%"></span>${steps.map((s) => `<i class="${s <= g.gained ? 'on' : ''}" style="left:${(s / span) * 100}%"></i>`).join('')}
+        <b class="gnow" style="left:${pct}%">${fmt1(g.latest)}</b></div>
+      <div class="gends num"><span>${fmt1(g.base)} start</span><span>${signed(g.gained)} ${unit()}</span><span>goal ${fmt1(g.target)}</span></div>
+    </div>`;
+}
+/** Scans vs. a realistic pace line (0.3 kg/month) toward the goal. */
+function paceChart(sc, g) {
+  const pts = sc.filter((s) => toNum(s.smm) != null).map((s) => ({ t: new Date(s.date).getTime(), v: toNum(s.smm) }));
+  if (!pts.length) return '';
+  const RATE = 0.3 / 30.44; // kg per day
+  const t0 = pts[0].t, tGoal = t0 + ((toNum(db.goals.muscleKg) || 0) / RATE) * 864e5, now = Date.now();
+  const x1 = Math.max(tGoal, pts[pts.length - 1].t, now), W = 340, H = 140, L = 4, R = 4, T = 16, B = 20;
+  const lo = g.base - 0.3, hi = g.target + 0.2;
+  const X = (t) => L + ((t - t0) / (x1 - t0 || 1)) * (W - L - R), Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  const expectNow = Math.min(g.target, g.base + RATE * ((pts[pts.length - 1].t - t0) / 864e5));
+  const diff = g.latest - expectNow;
+  const verdict = pts.length < 2 ? { cls: 'muted', t: 'Add your next scan to see your pace' }
+    : diff >= 0.05 ? { cls: 'good', t: `▲ Ahead of pace by ${fmt1(diff)} ${unit()}` }
+    : diff > -0.15 ? { cls: 'good', t: '✓ On pace' } : { cls: 'warn', t: `▼ Behind pace by ${fmt1(-diff)} ${unit()}` };
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${X(p.t).toFixed(1)},${Y(p.v).toFixed(1)}`).join('');
+  return `<div class="pace"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Skeletal muscle by scan against a 0.3 kilogram per month pace">
+      <line class="goal-line" x1="${L}" x2="${W - R}" y1="${Y(g.target)}" y2="${Y(g.target)}"/>
+      <text class="axis" x="${W - R}" y="${Y(g.target) - 5}" text-anchor="end">Goal ${fmt1(g.target)}</text>
+      <path class="pace-line" d="M${X(t0)},${Y(g.base)}L${X(tGoal)},${Y(g.target)}"/>
+      ${now < x1 ? `<line class="today" x1="${X(now)}" x2="${X(now)}" y1="${T}" y2="${H - B}"/>` : ''}
+      <path class="line" d="${line}"/>
+      ${pts.map((p) => `<circle class="pt" cx="${X(p.t).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="5"><title>${shortDate(p.t)}: ${fmt1(p.v)} ${unit()}</title></circle>`).join('')}
+      <text class="axis" x="${L}" y="${H - 6}">${shortDate(t0)}</text>
+      <text class="axis" x="${X(tGoal)}" y="${H - 6}" text-anchor="${X(tGoal) > W - 50 ? 'end' : 'middle'}">goal ~${new Date(tGoal).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</text>
+    </svg>
+    <div class="pace-key small"><span><i class="k-you"></i>You</span><span><i class="k-pace"></i>0.3 ${unit()}/month pace</span><span class="st ${verdict.cls}">${verdict.t}</span></div></div>`;
 }
 
 /** Small muscle-goal card from the body scans. */
@@ -847,10 +958,10 @@ function muscleCard() {
       <div class="sub">Add your body scan to track skeletal muscle toward +${db.goals.muscleKg} kg</div></div><span class="chev faint">${ICON.chev}</span></button>`;
   }
   const g = bodyGoal(sc), latest = sc[sc.length - 1];
+  if (g.target == null) return '';
   return `<button class="card day-card" data-act="go-body"><div class="grow">
-      <div class="row"><span class="title grow">Muscle goal</span><span class="num small"><b>${fmt1(latest.smm)}</b> / ${fmt1(g.target)} kg</span></div>
-      ${meter(g.gained, db.goals.muscleKg)}
-      <div class="sub">${g.gained >= 0 ? '+' : '−'}${fmt1(Math.abs(g.gained))} of +${db.goals.muscleKg} kg skeletal muscle · next scan ${nextScanText(latest)}</div>
+      <div class="row"><span class="title grow">Muscle goal</span><span class="small muted">next scan ${nextScanText(latest)}</span></div>
+      ${goalTrack(g)}
     </div><span class="chev faint">${ICON.chev}</span></button>`;
 }
 
@@ -1004,6 +1115,110 @@ views.progress = () => {
   return { title: v.title, body: modeSeg() + v.body };
 };
 
+// ---------------------------------------------------------------- body scan visuals
+// status: lean measures are fine at/above range; body fat is only fine inside it. Icon + label always ship with the colour.
+function rangeStatus(k, v, r) {
+  if (v == null || !r) return null;
+  if (v < r[0]) return { cls: 'warn', icon: '▼', text: 'Below range' };
+  if (v > r[1]) return k === 'fat' ? { cls: 'warn', icon: '▲', text: 'Above range' } : { cls: 'good', icon: '▲', text: 'Above range' };
+  return { cls: 'good', icon: '✓', text: 'In range' };
+}
+const signed = (d) => `${d > 0 ? '+' : d < 0 ? '−' : '±'}${fmt1(Math.abs(d))}`;
+// keep the sheet's precision: 20.0, 1.53
+const fmtN = (v) => (v == null ? '—' : Math.abs(v * 10 - Math.round(v * 10)) < 1e-6 ? (+v).toFixed(1) : String(+(+v).toFixed(2)));
+
+/** Weight split into skeletal muscle / other lean / fat, one stacked bar. */
+function compositionViz(s, first) {
+  const w = toNum(s.weight), f = toNum(s.fat), smm = toNum(s.smm);
+  if (w == null || f == null) return '';
+  const fatKg = (w * f) / 100, lean = toNum(s.lbm) ?? w - fatKg;
+  const parts = [['smm', 'Skeletal muscle', smm], ['other', 'Other lean', smm != null ? lean - smm : lean], ['fatkg', 'Fat', fatKg]]
+    .filter((p) => p[2] != null && p[2] > 0);
+  const tot = parts.reduce((t, p) => t + p[2], 0);
+  const was = (k) => {
+    if (!first || first === s) return null;
+    const fw = toNum(first.weight), ff = toNum(first.fat), fs = toNum(first.smm);
+    if (fw == null || ff == null) return null;
+    const ffk = (fw * ff) / 100, fl = toNum(first.lbm) ?? fw - ffk;
+    return k === 'smm' ? fs : k === 'fatkg' ? ffk : fs != null ? fl - fs : fl;
+  };
+  const u = unit();
+  return `<div class="viz-block">
+    <div class="viz-h"><b>What your ${fmt1(w)} ${u} is made of</b></div>
+    <div class="comp-bar" role="img" aria-label="${parts.map((p) => `${p[1]} ${fmt1(p[2])} ${u}`).join(', ')}">
+      ${parts.map((p) => `<span class="seg-${p[0]}" style="flex:${p[2]}" title="${p[1]}: ${fmt1(p[2])} ${u} (${Math.round((p[2] / tot) * 100)}%)"></span>`).join('')}
+    </div>
+    <div class="comp-legend">${parts.map((p) => {
+      const b = was(p[0]);
+      return `<div><span class="sw seg-${p[0]}"></span><span class="grow">${p[1]}</span>
+        <span class="num"><b>${fmt1(p[2])}</b> ${u}</span><span class="num faint pct">${Math.round((p[2] / tot) * 100)}%</span>
+        ${b != null ? `<span class="num small delta">${signed(p[2] - b)}</span>` : ''}</div>`;
+    }).join('')}</div>
+    ${first && first !== s ? `<div class="small faint" style="margin-top:4px">Change since ${shortDate(first.date)} on the right.</div>` : ''}
+  </div>`;
+}
+
+/** Each measure against its healthy range: grey band = range, dot = you. */
+function rangeViz(s) {
+  const rows = [
+    ['smm', 'Skeletal muscle', [['', s.smm]]], ['lbm', 'Lean body mass', [['', s.lbm]]], ['fat', 'Body fat', [['', s.fat]], '%'],
+    ['armL', 'Arms (lean)', [['L', s.armL, 'armL'], ['R', s.armR, 'armR']]],
+    ['legL', 'Legs (lean)', [['L', s.legL, 'legL'], ['R', s.legR, 'legR']]], ['torso', 'Torso (lean)', [['', s.torso]]],
+  ].map(([k, label, vals, un]) => {
+    const pts = vals.filter((x) => toNum(x[1]) != null).map(([tag, v, kk]) => ({ tag, v: toNum(v), r: rangeFor(kk || k, s), k: kk || k }));
+    const r = pts.length && pts[0].r;
+    if (!pts.length || !r) return '';
+    const lo = Math.min(r[0], ...pts.map((p) => p.v)), hi = Math.max(r[1], ...pts.map((p) => p.v)), pad0 = (hi - lo) * 0.25 || 1;
+    const x0 = lo - pad0, x1 = hi + pad0, X = (v) => ((v - x0) / (x1 - x0)) * 100;
+    const st = pts.map((p) => rangeStatus(k === 'fat' ? 'fat' : p.k, p.v, p.r));
+    const worst = st.find((x) => x.cls === 'warn') || st[0];
+    const valTxt = pts.map((p) => `${p.tag ? `<span class="faint">${p.tag}</span> ` : ''}<b>${fmtN(p.v)}</b>`).join(' · ');
+    const need = worst.cls === 'warn' && pts.some((p) => p.v < p.r[0]) && k !== 'fat'
+      ? ` · +${fmtN(+Math.max(...pts.map((p) => p.r[0] - p.v)).toFixed(2))} to range` : '';
+    return `<div class="rb">
+      <div class="rb-h"><span class="grow">${label}</span><span class="num">${valTxt} ${un || unit()}</span></div>
+      <div class="rb-track ${pts.length > 1 ? 'pair' : ''}" role="img" aria-label="${label}: ${pts.map((p) => `${p.tag} ${fmtN(p.v)}`).join(', ')}; healthy range ${r[0]} to ${r[1]}">
+        <span class="band" style="left:${X(r[0])}%;width:${X(r[1]) - X(r[0])}%" title="Healthy range ${r[0]}–${r[1]}"></span>
+        ${pts.map((p, i) => `<span class="mk ${st[i].cls}" style="left:${X(p.v)}%" title="${p.tag ? `${p.tag}: ` : ''}${fmtN(p.v)} — ${st[i].text}">${p.tag}</span>`).join('')}
+      </div>
+      <div class="rb-f"><span class="st ${worst.cls}">${worst.icon} ${worst.text}${need}</span><span class="num faint">range ${r[0]}–${r[1]}</span></div>
+    </div>`;
+  }).filter(Boolean);
+  if (!rows.length) {
+    return `<div class="viz-block"><div class="viz-h"><b>Vs healthy range</b></div>
+      <p class="small muted">Add the healthy ranges from your sheet (the numbers in [brackets]) to a scan to see where you sit. Tap a scan below to edit it.</p></div>`;
+  }
+  return `<div class="viz-block"><div class="viz-h"><b>Vs healthy range</b><span class="small faint">grey band = healthy</span></div>${rows.join('')}</div>`;
+}
+
+/** Front-facing figure: each segment coloured by where its lean mass sits vs. range. */
+function bodyMapViz(s) {
+  const seg = (k) => { const v = toNum(s[k]); return { v, st: rangeStatus(k, v, rangeFor(k, s)) }; };
+  const m = { armR: seg('armR'), armL: seg('armL'), legR: seg('legR'), legL: seg('legL'), torso: seg('torso') };
+  if (!Object.values(m).some((x) => x.v != null)) return '';
+  const cls = (x) => (x.st ? x.st.cls : 'none');
+  const lab = (x, tag) => (x.v == null ? '' : `${tag} ${fmtN(x.v)}${x.st ? ` ${x.st.icon}` : ''}`);
+  const tip = (x, n) => `<title>${n}: ${x.v == null ? 'no data' : `${fmtN(x.v)} ${unit()}${x.st ? ` — ${x.st.text}` : ''}`}</title>`;
+  // the figure faces you, so the person's right side is on the left of the picture
+  return `<div class="viz-block">
+    <div class="viz-h"><b>Lean mass by body part</b><span class="small faint">facing you</span></div>
+    <svg class="bodymap" viewBox="0 0 300 236" role="img" aria-label="Body map of lean mass by segment">
+      <circle class="head" cx="150" cy="22" r="15"/>
+      <rect class="b ${cls(m.torso)}" x="121" y="43" width="58" height="82" rx="14">${tip(m.torso, 'Torso')}</rect>
+      <rect class="b ${cls(m.armR)}" x="96" y="46" width="21" height="76" rx="10">${tip(m.armR, 'Right arm')}</rect>
+      <rect class="b ${cls(m.armL)}" x="183" y="46" width="21" height="76" rx="10">${tip(m.armL, 'Left arm')}</rect>
+      <rect class="b ${cls(m.legR)}" x="123" y="129" width="25" height="100" rx="12">${tip(m.legR, 'Right leg')}</rect>
+      <rect class="b ${cls(m.legL)}" x="152" y="129" width="25" height="100" rx="12">${tip(m.legL, 'Left leg')}</rect>
+      <text x="88" y="88" text-anchor="end">${lab(m.armR, 'R arm')}</text>
+      <text x="212" y="88" text-anchor="start">${lab(m.armL, 'L arm')}</text>
+      <text x="115" y="184" text-anchor="end">${lab(m.legR, 'R leg')}</text>
+      <text x="185" y="184" text-anchor="start">${lab(m.legL, 'L leg')}</text>
+      ${m.torso.v != null ? `<text class="in ${cls(m.torso)}" x="150" y="89" text-anchor="middle">${fmtN(m.torso.v)}</text>` : ''}
+    </svg>
+    <div class="map-legend small"><span><i class="sw good"></i>✓ In or above range</span><span><i class="sw warn"></i>▼ Below range</span><span><i class="sw none"></i>No range</span></div>
+  </div>`;
+}
+
 function bodyView() {
   const sc = sortedScans();
   const title = '<h1>Progress</h1><button class="btn sm soft" data-act="add-scan">+ Scan</button>';
@@ -1024,14 +1239,18 @@ function bodyView() {
   const first = pts.length ? pts[0].v : null, last = pts.length ? pts[pts.length - 1].v : null;
   const delta = first != null && pts.length > 1 ? last - first : null;
   const goalCard = g.target != null ? `<div class="card">
-      <div class="row"><b class="grow">Muscle goal</b><span class="num small">${fmt1(g.base)} → <b>${fmt1(g.target)}</b> ${unit()}</span></div>
-      ${meter(g.gained, db.goals.muscleKg)}
-      <div class="small muted">${g.gained >= 0 ? '+' : '−'}${fmt1(Math.abs(g.gained))} of +${db.goals.muscleKg} ${unit()} skeletal muscle · next scan ${nextScanText(latest)}.
-        Realistic pace: about 0.2–0.4 ${unit()} of muscle a month.</div></div>` : '';
+      <div class="row"><b class="grow">Muscle goal</b><span class="small muted">next scan ${nextScanText(latest)}</span></div>
+      ${goalTrack(g)}${paceChart(sc, g)}</div>` : '';
+  const overview = `<div class="card">
+      <div class="row"><b class="grow">Latest scan</b><span class="small muted">${fmtDate(latest.date)}</span></div>
+      ${compositionViz(latest, sc.length > 1 ? sc[0] : null)}${rangeViz(latest)}${bodyMapViz(latest)}
+    </div>`;
   return {
     title,
     body: `<div class="stack">
       ${goalCard}
+      ${overview}
+      <div class="section-title" style="margin:10px 2px 0">Trends</div>
       <div class="seg full" role="tablist">${BODY.map(([key, l]) => `<button class="${key === k ? 'on' : ''}" data-act="body-metric" data-k="${key}">${l}</button>`).join('')}</div>
       <div class="stats">
         <div class="stat"><div class="v num">${fmtV(last)}</div><div class="k">${meta[2]}</div></div>

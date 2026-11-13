@@ -421,10 +421,12 @@ const SCAN_FIELDS = [
   ['vfl', 'Visceral fat level', '', 'health', 'vfl'], ['vfa', 'Visceral fat area', 'cm²', 'health', 'down'],
   ['bwi', 'BWI score', '/10', 'health', 'bwi'], ['bioAge', 'Bio age', 'yrs', 'health', 'bioAge'], ['age', 'Your age', 'yrs', 'health', 'info'],
   ['whr', 'Waist-to-hip ratio', '', 'health', 'down'], ['abd', 'Abdominal circumference', 'cm', 'health', 'abd'],
-  ['bmr', 'BMR', 'kcal', 'health', 'info'],
+  ['bmr', 'BMR', 'kcal', 'health', 'info'], ['tee', 'Total energy use (TEE)', 'kcal', 'health', 'info'],
+  ['icf', 'Intracellular fluid', 'w', 'health', 'info'], ['ecf', 'Extracellular fluid', 'w', 'health', 'info'],
+  ['subFat', 'Subcutaneous fat mass', 'w', 'health', 'info'], ['visFat', 'Visceral fat mass', 'w', 'health', 'info'],
 ];
 const FIELD = Object.fromEntries(SCAN_FIELDS.map((f) => [f[0], f]));
-const HAS_RANGE = (k) => !['weight', 'height', 'vfl', 'bwi', 'bioAge', 'age', 'abd', 'bmr'].includes(k);
+const HAS_RANGE = (k) => !['weight', 'height', 'vfl', 'bwi', 'bioAge', 'age', 'abd', 'bmr', 'tee', 'icf', 'ecf', 'subFat', 'visFat'].includes(k);
 const fmtRange = (r) => (r ? `${r[0]}–${r[1]}` : '');
 function parseRange(v) {
   const m = String(v || '').replace(/,/g, '.').match(/(\d+(?:\.\d+)?)\s*[-–—to]+\s*(\d+(?:\.\d+)?)/);
@@ -504,6 +506,38 @@ const SCAN_LABELS = {
   bmr: [/\bBMR\b/i, 600, 4000, true], bioAge: [/BIO\s*AGE/i, 10, 100, true], bwi: [/\bBWI/i, 0, 10],
   whr: [/WAIST\s*TO\s*HIP/i, 0.4, 1.5], abd: [/ABDOMINAL/i, 40, 200], age: [/\bAGE\b/i, 12, 100, true],
 };
+// Evolt app list screens: label and value on one row, verdict in brackets. Most specific labels first.
+const LIST_LABELS = [
+  ['armLF', /LEFT\s*ARM\s*FAT/i], ['armRF', /RIGHT\s*ARM\s*FAT/i], ['legLF', /LEFT\s*LEG\s*FAT/i], ['legRF', /RIGHT\s*LEG\s*FAT/i], ['torsoF', /TORSO\s*FAT/i],
+  ['armL', /LEFT\s*ARM\s*LEAN/i], ['armR', /RIGHT\s*ARM\s*LEAN/i], ['legL', /LEFT\s*LEG\s*LEAN/i], ['legR', /RIGHT\s*LEG\s*LEAN/i], ['torso', /TORSO\s*LEAN/i],
+  ['visFat', /VISCERAL\s*FAT\s*MASS/i], ['subFat', /SUBCUTANEOUS/i], ['vfl', /VISCERAL\s*FAT\s*LEVEL/i], ['vfa', /VISCERAL\s*FAT\s*AREA/i],
+  ['fat', /BODY\s*FAT\s*PERCENT|FAT\s*PERCENTAGE|PBF/i], ['fatMass', /BODY\s*FAT\s*MASS|^\s*FAT\s*MASS/i], ['lbm', /LEAN\s*BODY\s*MASS/i],
+  ['smm', /SKELETAL\s*MUSCLE/i], ['water', /TOTAL\s*BODY\s*WATER/i], ['icf', /INTRA\s*CELLULAR/i], ['ecf', /EXTRA\s*CELLULAR/i],
+  ['tee', /TOTAL\s*ENERGY|\(TEE\)/i], ['bmr', /BASAL\s*METABOLIC|\bBMR\b/i], ['protein', /\bPROTEIN\b/i], ['mineral', /\bMINERAL/i],
+  ['whr', /WAIST\s*TO\s*HIP/i], ['bwi', /\bBWI\b|WELLNESS\s*INDEX/i], ['bioAge', /BIO\s*AGE/i], ['weight', /^\s*(BODY\s*)?WEIGHT\b/i],
+];
+const LIST_LIMITS = { tee: [800, 6000], icf: [5, 60], ecf: [2, 40], subFat: [0.5, 100], visFat: [0.05, 20] };
+const VERDICT = { optimal: 'optimal', normal: 'optimal', under: 'under', low: 'under', below: 'under', high: 'high', over: 'high', above: 'high' };
+function parseListLines(lines) {
+  const out = {}, status = {};
+  for (const ln of lines) {
+    const hit = LIST_LABELS.find(([, re]) => re.test(ln.text));
+    if (!hit) continue;
+    const [k, re] = hit;
+    if (out[k] != null) continue;
+    const rest = ln.text.slice(ln.text.search(re)).replace(re, '').replace(/,/g, '.');
+    const m = rest.match(/(\d+(?:\.\d+)?)\s*(?:kg|%|cm2|cm²|kcal|lbs?|yrs?)?\s*(?:[(\[{]\s*([A-Za-z]+))?/i);
+    if (!m) continue;
+    const [lo, hi] = LIST_LIMITS[k] || (SCAN_LABELS[k] ? SCAN_LABELS[k].slice(1, 3) : [0, 1e5]);
+    let v = +m[1];
+    for (const f of [1, 0.1, 0.01]) { if (v * f >= lo && v * f <= hi) { v = +(v * f).toFixed(2); break; } }
+    if (v < lo || v > hi) continue;
+    out[k] = v;
+    const verdict = m[2] && VERDICT[m[2].toLowerCase()];
+    if (verdict) status[k] = verdict;
+  }
+  return { fields: out, status };
+}
 /** words: [{t, x, y}] with x/y as fractions of image width. Returns {fields, date}. */
 function parseScanWords(words, lines, valueWords = []) {
   const out = {}, ranges = {};
@@ -601,6 +635,10 @@ async function readScanFile(file, onProgress) {
   half = 0.5;
   const b = await run(plain); // values in white boxes, read more accurately
   const res = parseScanWords(a.words, a.lines.concat(b.lines), b.words);
+  // the Evolt app's list screens put label and value on one row — when that layout is found, trust it
+  const list = parseListLines(b.lines.concat(a.lines));
+  if (Object.keys(list.fields).length >= 3) { res.fields = list.fields; res.ranges = {}; res.list = true; }
+  res.status = list.status;
   return res;
 }
 async function onScanUpload(file) {
@@ -615,10 +653,12 @@ async function onScanUpload(file) {
     got.forEach((k) => { const e = $(`#sc-${k}`); if (e) { e.value = res.fields[k]; e.classList.add('filled'); const g = e.closest('details'); if (g) g.open = true; } });
     if (res.date) { $('#sc-date').value = res.date; $('#sc-date').classList.add('filled'); }
     if (res.sex && $('#sc-sex')) { $('#sc-sex').value = res.sex; $('#sc-sex').classList.add('filled'); }
+    ui.ocrStatus = { ...(ui.ocrStatus || {}), ...(res.status || {}) };
+    Object.entries(res.status || {}).forEach(([k, v]) => { const e = $(`#sr-${k}`); if (e && !e.value) e.placeholder = `Evolt says ${v} — range optional`; });
     Object.entries(res.ranges || {}).forEach(([k, r]) => { const e = $(`#sr-${k}`); if (e && !e.value) { e.value = fmtRange(r); e.classList.add('filled'); } });
     const missing = SCAN_FIELDS.filter(([k]) => !got.includes(k)).map(([, l]) => l);
     say(got.length
-      ? `<b>Read ${got.length} value${got.length === 1 ? '' : 's'}</b> (highlighted). Check them — and the date — against your sheet before saving.${missing.length ? `<br><span class="faint">Not found: ${missing.join(', ')}.</span>` : ''}`
+      ? `<b>Read ${got.length} value${got.length === 1 ? '' : 's'}</b> (highlighted). Check them — and the date — against your sheet before saving.${res.list ? '<br><span class="faint">This screen shows part of your results — anything not on it is left as it was. Evolt’s Optimal / Under / High verdicts colour your visuals.</span>' : missing.length ? `<br><span class="faint">Not found: ${missing.join(', ')}.</span>` : ''}`
       : 'Couldn’t find scan values in that image. Try a sharper screenshot of the result sheet, or type the numbers in.');
   } catch (e) {
     say('Couldn’t read that file. Use a photo or screenshot (JPG/PNG/HEIC), or type the numbers in.');
@@ -632,6 +672,7 @@ function scanModal(scan) {
   const d = new Date(s.date);
   const u = (x) => (x === 'w' ? unit() : x);
   const rng = (k) => (s.ranges && s.ranges[k]) || (isNew ? rangeFor(k) : null);
+  ui.ocrStatus = null;
   openModal(`
     <div class="row"><h3 class="grow">${isNew ? 'Add body scan' : 'Edit body scan'}</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
     <label class="btn soft big upload" style="margin-top:6px">📷 Upload scan photo or screenshot
@@ -663,6 +704,8 @@ function scanModal(scan) {
       SCAN_FIELDS.forEach(([k]) => { const e = $(`#sr-${k}`), r = e && parseRange(e.value); if (r) s.ranges[k] = r; });
       s.notes = $('#sc-notes').value.trim();
       if ($('#sc-sex')) s.sex = $('#sc-sex').value;
+      if (ui.ocrStatus) s.status = { ...(s.status || {}), ...ui.ocrStatus };
+      if (s.status) Object.keys(s.status).forEach((k) => { if (s[k] == null) delete s.status[k]; });
       if (s.weight == null && s.smm == null) { toast('Enter at least weight or skeletal muscle'); return; }
       const i = db.scans.findIndex((x) => x.id === s.id);
       if (i >= 0) db.scans[i] = s; else db.scans.push(s);
@@ -1288,6 +1331,12 @@ function statusOf(k, s) {
   const r = HAS_RANGE(k) ? rangeFor(k, s) || (k === 'vfa' ? (s.sex === 'M' ? [50, 100] : [40, 80]) : null) : null;
   const ok = (t = 'Optimal') => ({ cls: 'good', icon: '✓', text: t });
   const work = (icon, t) => ({ cls: 'warn', icon, text: t });
+  const said = !r && s.status && s.status[k];
+  if (said && /^(up|down|mid)$/.test(dir)) {
+    if (said === 'optimal') return ok();
+    if (said === 'under') return dir === 'down' ? ok('Under — fine') : work('▼', 'Under (Evolt)');
+    return dir === 'up' ? ok('Above range') : work('▲', 'High (Evolt)');
+  }
   switch (dir) {
     case 'up': return r ? (v < r[0] ? work('▼', v >= r[0] * 0.97 ? 'Just below range' : 'Below range') : ok(v > r[1] ? 'Above range' : 'Optimal')) : null;
     case 'down': return r ? (v > r[1] ? work('▲', v <= r[1] * 1.03 ? 'Just above range' : 'Above range') : ok(v < r[0] ? 'Low — fine' : 'Optimal')) : null;
@@ -1405,7 +1454,11 @@ function rangeGauge(k, s, name) {
   const v = toNum(s[k]); if (v == null) return '';
   const dir = FIELD[k][4], un = unitOf(k);
   const r = rangeFor(k, s) || (k === 'vfa' ? (s.sex === 'M' ? [50, 100] : [40, 80]) : null);
-  if (!r) return '';
+  if (!r) {
+    const st = statusOf(k, s); if (!st) return '';
+    return `<div class="gauge"><div class="rb-h"><span class="grow">${name}</span><span class="num"><b>${fmtK(k, v)} ${un}</b></span></div>
+      <div class="small"><span class="st ${st.cls}">${st.icon} ${st.text}</span> <span class="faint">· add the range from your sheet to see how far</span></div></div>`;
+  }
   const w = r[1] - r[0], min = Math.min(r[0] - w * 0.6, v - w * 0.1), max = Math.max(r[1] + w * 0.6, v + w * 0.1);
   const lowBad = dir === 'up' || dir === 'mid', highBad = dir === 'down' || dir === 'mid';
   const bands = [{ from: min, to: r[0], label: lowBad ? 'Low' : 'Low · fine', good: !lowBad },
@@ -2222,7 +2275,7 @@ function importData(file) {
     if (!d || !Array.isArray(d.sessions) || !Array.isArray(d.routine)) { toast('Not a Gym Log backup file'); return; }
     const fresh = d.sessions.filter((s) => !db.sessions.some((x) => x.id === s.id)).length;
     const scans = Array.isArray(d.scans) ? d.scans : [];
-    const freshScans = scans.filter((s) => !db.scans.some((x) => x.id === s.id)).length;
+    const freshScans = scans.filter((s) => !db.scans.some((x) => x.id === s.id || String(x.date).slice(0, 10) === String(s.date).slice(0, 10))).length;
     const keepRoutine = (d.plan || 1) < (db.plan || 1);
     openModal(`<h3>Import backup</h3>
       <p class="muted">The file has ${plural(d.sessions.length, 'workout')}, ${plural(scans.length, 'body scan')} and ${plural(d.routine.length, 'training day')}. New to this device: ${plural(fresh, 'workout')}, ${plural(freshScans, 'scan')}.
@@ -2235,10 +2288,18 @@ function importData(file) {
       close: closeModal,
       merge: () => {
         db.sessions = db.sessions.concat(d.sessions.filter((s) => !db.sessions.some((x) => x.id === s.id)));
-        db.scans = db.scans.concat(scans.filter((s) => !db.scans.some((x) => x.id === s.id)));
-        // same scan with more detail in the file (e.g. ranges added later) → take the fuller copy
+        // same scan = same id or same day: fill in whatever the file has that this device doesn't (values, ranges, verdicts)
+        const sameScan = (a, b) => a.id === b.id || String(a.date).slice(0, 10) === String(b.date).slice(0, 10);
         let upd = 0;
-        scans.forEach((s) => { const i = db.scans.findIndex((x) => x.id === s.id); if (i >= 0 && Object.keys(s).length > Object.keys(db.scans[i]).length) { db.scans[i] = s; upd += 1; } });
+        scans.forEach((s) => {
+          const i = db.scans.findIndex((x) => sameScan(x, s));
+          if (i < 0) { db.scans.push(s); return; }
+          const cur = db.scans[i], before = JSON.stringify(cur);
+          const next = { ...s, ...Object.fromEntries(Object.entries(cur).filter(([, v]) => v != null && v !== '')), id: cur.id };
+          next.ranges = { ...(s.ranges || {}), ...(cur.ranges || {}) };
+          next.status = { ...(s.status || {}), ...(cur.status || {}) };
+          if (JSON.stringify(next) !== before) { db.scans[i] = next; upd += 1; }
+        });
         if (d.membership && !db.membership) db.membership = d.membership;
         if (!keepRoutine) { db.routine = d.routine; if (d.plan) db.plan = d.plan; }
         save(); closeModal(); toast(`Imported ${fresh} workouts, ${freshScans} scans${upd ? `, updated ${upd}` : ''}`); render();

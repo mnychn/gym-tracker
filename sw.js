@@ -1,5 +1,5 @@
 // Bump VERSION whenever you change any app file so devices pick up the update.
-const VERSION = 'gymlog-v21';
+const VERSION = 'gymlog-v22';
 const VENDOR = 'gymlog-vendor-1';
 const ASSETS = [
   './', './index.html', './styles.css', './app.js', './seed.js', './guides.js', './anim.js', './manifest.webmanifest',
@@ -95,7 +95,7 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Network-first for the page itself (so updates show up), cache-first for everything else.
+// Network-first for the page and app code (so updates always show up together), cache-first for images.
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
@@ -114,5 +114,16 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(caches.open(VENDOR).then((c) => c.match(req).then((hit) => hit || fetch(req).then((res) => { if (res.ok) c.put(req, res.clone()); return res; }))));
     return;
   }
+  // app code (js/css/manifest): network-first so a new version is never mixed with old cached code; cache when offline
+  if (/\.(js|css|webmanifest)$/.test(new URL(req.url).pathname)) {
+    e.respondWith(
+      fetch(req, { cache: 'no-cache' }).then((res) => {
+        if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); }
+        return res;
+      }).catch(() => caches.match(req, { ignoreSearch: true }))
+    );
+    return;
+  }
+  // images: cache-first
   e.respondWith(caches.match(req).then((hit) => hit || fetch(req)));
 });

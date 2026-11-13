@@ -1949,6 +1949,7 @@ function applyTheme() {
   else delete document.documentElement.dataset.theme;
 }
 function renderView() {
+  if (!views[ui.tab]) ui.tab = 'train';
   const v = views[ui.tab]();
   topbar.innerHTML = `<div class="topbar-inner">${v.title}</div>`;
   view.innerHTML = v.body;
@@ -2375,6 +2376,9 @@ function importData(file) {
 render();
 if (db.active) acquireWakeLock();
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname))) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js').then((r) => r.update()).catch(() => {});
+  // a new version took over → reload once so page and code match (all data is in localStorage, so nothing is lost)
+  let reloaded = false; const hadCtl = !!navigator.serviceWorker.controller; // first install: no reload needed
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded && hadCtl) { reloaded = true; location.reload(); } });
 }
 })();

@@ -1487,6 +1487,9 @@ function bodyMapViz(s) {
       ${m.torso.v != null ? `<text class="in ${cls(m.torso)}" x="150" y="89" text-anchor="middle">${fmtN(m.torso.v)}</text>` : ''}
     </svg>
     <div class="map-legend small"><span><i class="sw good"></i>✓ Healthy</span><span><i class="sw warn"></i>▼ Work on</span><span><i class="sw none"></i>No range</span></div>
+    ${Object.values(m).some((x) => x.v != null && !x.st) ? `<div class="map-hint small">Grey parts have no healthy range on this scan, so they can’t be coloured.
+      Add the [bracket] numbers from your sheet — or upload the scan photo again.
+      <button class="btn sm soft" data-act="edit-scan" data-id="${s.id}">Add ranges</button></div>` : ''}
   </div>`;
 }
 

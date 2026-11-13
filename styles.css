@@ -523,3 +523,5 @@ textarea.field { resize: vertical; font: inherit; }
 .bodymap text.in, .bodymap text.in.good, .bodymap text.in.warn { fill: var(--text); }
 .sw.good { background: var(--z-ok); box-shadow: inset 0 0 0 1.5px var(--good); }
 .sw.warn { background: var(--z-bad); box-shadow: inset 0 0 0 1.5px var(--warnc); }
+.map-hint { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--warnc) 14%, var(--surface)); color: var(--text-2); line-height: 1.5; }
+.map-hint .btn { display: block; margin-top: 8px; }

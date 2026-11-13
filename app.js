@@ -1475,7 +1475,7 @@ function compositionViz(s, first) {
   };
   const u = unit();
   return `<div class="viz-block">
-    <div class="viz-h"><b>What your ${fmt1(w)} ${u} is made of</b></div>
+    <div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">🧁</span>What your ${fmt1(w)} ${u} is made of</b></div>
     <div class="comp-bar" role="img" aria-label="${parts.map((p) => `${p[1]} ${fmt1(p[2])} ${u}`).join(', ')}">
       ${parts.map((p) => `<span class="seg-${p[0]}" style="flex:${p[2]}" title="${p[1]}: ${fmt1(p[2])} ${u} (${Math.round((p[2] / tot) * 100)}%)"></span>`).join('')}
     </div>
@@ -1560,7 +1560,7 @@ function scorecardViz(s) {
       <span class="t-v num">${x.valTxt}${x.un && x.un !== '/10' ? ` <small>${x.un}</small>` : x.un ? '<small>/10</small>' : ''}</span><span class="t-s">${x.st.text}</span></summary>
       <p>${x.tip}${x.r ? ` <b>Your range: ${x.r[0]}–${x.r[1]}${x.un && x.un !== '/10' ? ` ${x.un}` : ''}.</b>` : ''}</p></details>`;
   return `<div class="viz-block">
-    <div class="viz-h"><b>Where you stand</b><span class="small faint">tap a tile for details</span></div>
+    <div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">🎯</span>Where you stand</b><span class="small faint">tap a tile</span></div>
     <div class="sc-strip" role="img" aria-label="${good.length} optimal, ${work.length} need work">${work.map((x) => `<span class="warn" title="${x.name}: ${x.st.text}"></span>`).join('')}${good.map((x) => `<span class="good" title="${x.name}: ${x.st.text}"></span>`).join('')}</div>
     <div class="sc-count"><span class="st warn">▼ ${work.length} to work on</span><span class="st good">✓ ${good.length} optimal</span></div>
     ${work.length ? `<div class="sc-h warn">Needs work</div><div class="tiles">${work.map(tile).join('')}</div>` : ''}
@@ -1596,7 +1596,7 @@ function rangeZones(s) {
       <div class="rb-f">${foot}</div>
     </div>`;
   });
-  return `<div class="viz-block"><div class="viz-h"><b>Body parts vs healthy range</b></div>
+  return `<div class="viz-block"><div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">💪</span>Body parts vs healthy range</b></div>
     <div class="zb-key small"><span><i class="z ok"></i>Healthy</span><span><i class="z bad"></i>Work on</span><span><i class="z fine"></i>Fine</span></div>
     ${rows.join('')}</div>`;
 }
@@ -1636,7 +1636,7 @@ function rangeGauge(k, s, name) {
   return gauge(name, v, bands, min, max, (x) => `${fmtK(k, x)} ${un}`.trim(), note);
 }
 function gaugesViz(s) {
-  const sec = (title, parts) => { const p = parts.filter(Boolean); return p.length ? `<div class="gs-h">${title}</div>${p.join('')}` : ''; };
+  const sec = (title, parts) => { const p = parts.filter(Boolean); return p.length ? `<div class="gs-sec"><div class="gs-h">${title}</div>${p.join('')}</div>` : ''; };
   const age = toNum(s.age);
   // Weight → BMI (WHO), using the height from this or an earlier scan
   const wt = toNum(s.weight), ht = toNum(s.height) || lastHeight(s);
@@ -1675,8 +1675,8 @@ function gaugesViz(s) {
     bio == null || age == null ? '' : gauge('Bio age vs your age', bio, [{ from: age - 12, to: age + 0.5, label: 'Younger', good: true }, { from: age + 0.5, to: age + 12, label: 'Older' }],
       age - 12, age + 12, (v) => `${v} yrs`, `your age is ${age}${bio < age ? ` — ${age - bio} years younger` : ''}`),
   ];
-  const body = sec('Weight', [weight]) + sec('Muscle', muscle) + sec('Fat', fatSec) + sec('Overall', overall);
-  return body ? `<div class="viz-block"><div class="viz-h"><b>Health scores</b><span class="small faint">your scan’s ranges, WHO &amp; Evolt guides</span></div>
+  const body = sec('⚖️ Weight', [weight]) + sec('💪 Muscle', muscle) + sec('🍩 Fat', fatSec) + sec('✨ Overall', overall);
+  return body ? `<div class="viz-block"><div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">💖</span>Health scores</b><span class="small faint">scan, WHO &amp; Evolt</span></div>
     <div class="zb-key small"><span><i class="z ok"></i>Healthy</span><span><i class="z bad"></i>Work on</span></div>${body}</div>` : '';
 }
 
@@ -1691,10 +1691,13 @@ function bodyMapViz(s) {
   const tip = (x, n) => `<title>${n}: ${x.v == null ? 'no data' : `${fmtN(x.v)} ${unit()}${x.st ? ` — ${x.st.text}` : ''}`}</title>`;
   // the figure faces you, so the person's right side is on the left of the picture
   return `<div class="viz-block">
-    <div class="viz-h"><b>Lean mass by body part</b><span class="small faint">facing you</span></div>
+    <div class="viz-h"><b class="vt"><span class="bub" aria-hidden="true">🧸</span>Lean mass by body part</b><span class="small faint">facing you</span></div>
     <svg class="bodymap" viewBox="0 0 300 236" role="img" aria-label="Body map of lean mass by segment">
-      <circle class="head" cx="150" cy="22" r="15"/>
-      <rect class="b ${cls(m.torso)}" x="121" y="43" width="58" height="82" rx="14">${tip(m.torso, 'Torso')}</rect>
+      <circle class="head" cx="150" cy="23" r="18"/>
+      <ellipse class="blush" cx="139" cy="28" rx="4" ry="2.4"/><ellipse class="blush" cx="161" cy="28" rx="4" ry="2.4"/>
+      <circle class="eye" cx="144" cy="22" r="2"/><circle class="eye" cx="156" cy="22" r="2"/>
+      <path class="smile" d="M146 28 Q150 31.5 154 28"/>
+      <rect class="b ${cls(m.torso)}" x="121" y="44" width="58" height="81" rx="22">${tip(m.torso, 'Torso')}</rect>
       <rect class="b ${cls(m.armR)}" x="96" y="46" width="21" height="76" rx="10">${tip(m.armR, 'Right arm')}</rect>
       <rect class="b ${cls(m.armL)}" x="183" y="46" width="21" height="76" rx="10">${tip(m.armL, 'Left arm')}</rect>
       <rect class="b ${cls(m.legR)}" x="123" y="129" width="25" height="100" rx="12">${tip(m.legR, 'Right leg')}</rect>
@@ -1713,10 +1716,35 @@ function bodyMapViz(s) {
   </div>`;
 }
 
+/** Little blob mascot for the Body hero; mood follows how many measures are optimal. */
+function blobFace(mood) {
+  const mouth = mood === 'happy' ? '<path d="M50 66 Q60 76 70 66" stroke="#34304d" stroke-width="3.4" stroke-linecap="round" fill="none"/>'
+    : '<path d="M52 69 Q60 73 68 69" stroke="#34304d" stroke-width="3.4" stroke-linecap="round" fill="none"/>';
+  const extra = mood === 'happy' ? '<path d="M98 18 l3 9 9 3 -9 3 -3 9 -3 -9 -9 -3 9 -3z" fill="#fff"/>'
+    : '<rect x="24" y="30" width="72" height="9" rx="4.5" fill="#f58646"/><path d="M95 33 l12 -6 M95 36 l12 4" stroke="#f58646" stroke-width="4" stroke-linecap="round"/>';
+  return `<svg class="blob" viewBox="0 0 120 110" aria-hidden="true">
+    <path d="M60 16 C92 16 108 44 108 70 C108 94 88 104 60 104 C32 104 12 94 12 70 C12 44 28 16 60 16 Z" fill="#fff"/>
+    ${extra}
+    <ellipse cx="38" cy="66" rx="8" ry="5" fill="#ffab9d" opacity=".8"/><ellipse cx="82" cy="66" rx="8" ry="5" fill="#ffab9d" opacity=".8"/>
+    <circle cx="47" cy="56" r="5" fill="#34304d"/><circle cx="73" cy="56" r="5" fill="#34304d"/>
+    <circle cx="49" cy="54" r="1.6" fill="#fff"/><circle cx="75" cy="54" r="1.6" fill="#fff"/>${mouth}</svg>`;
+}
+function bodyHero(s) {
+  const items = scoreItems(s), work = items.filter((x) => x.st.cls === 'warn').length, good = items.length - work;
+  const mood = good >= work * 1.5 ? 'happy' : 'focus';
+  const msg = !items.length ? 'Add ranges to see how you’re doing' : mood === 'happy' ? 'Looking great — keep it up!' : 'Game on — let’s build some muscle!';
+  return `<section class="b-hero">
+    <div class="b-hero-t"><span class="b-chip">Latest scan · ${shortDate(s.date)}</span>
+      <div class="b-msg">${msg}</div>
+      <div class="b-counts"><span class="b-c good"><b class="num">${good}</b> optimal</span><span class="b-c warn"><b class="num">${work}</b> to work on</span></div>
+      <span class="b-next">🗓️ Next scan ${nextScanText(s)}</span></div>
+    ${blobFace(mood)}
+  </section>`;
+}
 function bodyView() {
   const sc = sortedScans();
   const title = '<h1>Body</h1><button class="btn sm soft" data-act="add-scan">+ Scan</button>';
-  const fuel = `<div class="card small muted" style="line-height:1.6"><b style="color:var(--text)">Daily fuel for muscle gain</b><br>
+  const fuel = `<div class="card fuel small muted" style="line-height:1.6"><span class="fuel-e" aria-hidden="true">🥑</span><b style="color:var(--text)">Daily fuel for muscle gain</b><br>
     About <b class="num" style="color:var(--text)">${Number(db.goals.kcal).toLocaleString()} kcal</b> and <b class="num" style="color:var(--text)">${db.goals.protein} g protein</b> a day, protein spread over 3–4 meals.
     Add ~200–300 kcal on long jog days. If your weight hasn’t gone up after 4 weeks, add 100–150 kcal. Change these in Settings.</div>`;
   if (!sc.length) {
@@ -1731,15 +1759,17 @@ function bodyView() {
   ui.chart = { pts, fmtV };
   const first = pts.length ? pts[0].v : null, last = pts.length ? pts[pts.length - 1].v : null;
   const delta = first != null && pts.length > 1 ? last - first : null;
-  const overview = `<div class="card">
-      <div class="row"><b class="grow">Latest scan</b><span class="small muted">${fmtDate(latest.date)} · next ${nextScanText(latest)}</span></div>
-      ${scorecardViz(latest)}${compositionViz(latest, sc.length > 1 ? sc[0] : null)}${rangeZones(latest)}${bodyMapViz(latest)}${gaugesViz(latest)}
-    </div>`;
+  const card = (cls, html) => (html ? `<div class="card bcard ${cls}">${html}</div>` : '');
+  const overview = `${bodyHero(latest)}
+    ${card('lav', scorecardViz(latest))}
+    ${card('peach', compositionViz(latest, sc.length > 1 ? sc[0] : null))}
+    ${card('mint', bodyMapViz(latest) + rangeZones(latest))}
+    ${card('plain', gaugesViz(latest))}`;
   return {
     title,
     body: `<div class="stack">
       ${overview}
-      <div class="section-title" style="margin:10px 2px 0">Trends</div>
+      <div class="section-title" style="margin:10px 2px 0">📈 Trends</div>
       <div class="seg full" role="tablist">${BODY.map(([key, l]) => `<button class="${key === k ? 'on' : ''}" data-act="body-metric" data-k="${key}">${l}</button>`).join('')}</div>
       <div class="stats">
         <div class="stat"><div class="v num">${fmtV(last)}</div><div class="k">${meta[2]}</div></div>

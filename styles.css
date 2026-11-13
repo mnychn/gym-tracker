@@ -514,3 +514,12 @@ textarea.field { resize: vertical; font: inherit; }
 /* Health scores: section headings (Weight / Muscle / Fat / Overall) */
 .gs-h { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); margin: 14px 0 8px; padding-top: 10px; border-top: 1px solid var(--line, var(--surface-2)); }
 .zb-key + .gs-h { border-top: 0; padding-top: 0; margin-top: 6px; }
+/* One healthy / work-on colour pair everywhere: score bars, gauges, body map, legends */
+:root { --z-ok: color-mix(in srgb, var(--good) 45%, var(--surface)); --z-bad: color-mix(in srgb, var(--warnc) 42%, var(--surface)); }
+.z.ok, .g-bands span.good { background: var(--z-ok); }
+.z.bad, .g-bands span.bad { background: var(--z-bad); }
+.bodymap .b.good { fill: var(--z-ok); stroke: var(--good); stroke-width: 2; }
+.bodymap .b.warn { fill: var(--z-bad); stroke: var(--warnc); stroke-width: 2; }
+.bodymap text.in, .bodymap text.in.good, .bodymap text.in.warn { fill: var(--text); }
+.sw.good { background: var(--z-ok); box-shadow: inset 0 0 0 1.5px var(--good); }
+.sw.warn { background: var(--z-bad); box-shadow: inset 0 0 0 1.5px var(--warnc); }

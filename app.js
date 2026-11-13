@@ -1486,7 +1486,7 @@ function bodyMapViz(s) {
       <text x="185" y="184" text-anchor="start">${lab(m.legL, 'L leg')}</text>
       ${m.torso.v != null ? `<text class="in ${cls(m.torso)}" x="150" y="89" text-anchor="middle">${fmtN(m.torso.v)}</text>` : ''}
     </svg>
-    <div class="map-legend small"><span><i class="sw good"></i>✓ In or above range</span><span><i class="sw warn"></i>▼ Below range</span><span><i class="sw none"></i>No range</span></div>
+    <div class="map-legend small"><span><i class="sw good"></i>✓ Healthy</span><span><i class="sw warn"></i>▼ Work on</span><span><i class="sw none"></i>No range</span></div>
   </div>`;
 }
 

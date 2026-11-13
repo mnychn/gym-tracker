@@ -71,23 +71,39 @@ function summarize(sets, timed) {
 }
 
 // ---------------------------------------------------------------- storage
+// Weekly targets + body goal. Calories/protein are reminders only (not tracked).
+const GOAL_DEFAULTS = { sessions: 4, pt: 2, jogMin: 180, muscleKg: 2.5, kcal: 2150, protein: 100 };
 function defaults() {
   const seed = window.SEED || { routine: [], sessions: [] };
   return {
     version: 1,
+    plan: seed.plan || 1,
     settings: { unit: 'kg', defaultRest: 60, sound: true, vibrate: true, keepAwake: true, theme: 'auto' },
+    goals: { ...GOAL_DEFAULTS },
     routine: clone(seed.routine),
     sessions: clone(seed.sessions),
+    scans: [],
     active: null,
     rest: null,
   };
+}
+/** One-time switch to a newer training plan from seed.js; the old routine is kept so it can be restored. */
+function migrate(d) {
+  const seed = window.SEED || {};
+  if (seed.plan && (d.plan || 1) < seed.plan) {
+    if (d.routine && d.routine.length) d.prevRoutine = d.routine;
+    d.routine = clone(seed.routine); d.plan = seed.plan; d.planNotice = true;
+  }
+  if (!Array.isArray(d.scans)) d.scans = [];
+  d.goals = { ...GOAL_DEFAULTS, ...(d.goals || {}) };
+  return d;
 }
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const d = JSON.parse(raw), base = defaults();
-      return { ...base, ...d, settings: { ...base.settings, ...(d.settings || {}) } };
+      return migrate({ ...base, ...d, plan: d.plan || 1, settings: { ...base.settings, ...(d.settings || {}) } });
     }
   } catch (e) { /* fall through to defaults */ }
   return defaults();
@@ -99,7 +115,8 @@ function save() {
 }
 
 let db = load();
-const ui = { tab: 'train', openDays: new Set(), progressEx: null, metric: null, editing: null, modalActs: {}, chart: null };
+save();
+const ui = { tab: 'train', openDays: new Set(), progressEx: null, metric: null, editing: null, modalActs: {}, chart: null, progressMode: 'ex', bodyMetric: 'smm' };
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
 // ---------------------------------------------------------------- feedback
@@ -168,12 +185,50 @@ function lastEntry(name, excludeId) {
   }
   return null;
 }
+// ---- weekly goals: what kind of session was it, and how many jogging minutes?
+const JOG_RE = /\b(jog|jogging|run|running|treadmill)\b/i;
+const CARDIO_RE = /\b(jog|jogging|run|running|treadmill|walk|walking|hiit|cardio)\b/i;
+const KINDS = { pt: 'With PT', self: 'On your own', class: 'Class', cardio: 'Cardio' };
+const isGym = (k) => k === 'pt' || k === 'self' || k === 'class';
+function dayKind(d) {
+  if (d.kind) return d.kind;
+  return d.exercises.length && d.exercises.every((x) => CARDIO_RE.test(x.name)) ? 'cardio' : 'self';
+}
+function kindOf(s) {
+  if (s.kind) return s.kind;
+  const d = db.routine.find((x) => x.id === s.dayId);
+  if (d && d.kind) return d.kind;
+  return s.entries.length && s.entries.every((e) => CARDIO_RE.test(e.name)) ? 'cardio' : 'self';
+}
+function jogSecs(s) {
+  return s.entries.filter((e) => JOG_RE.test(e.name)).reduce((t, e) => t + e.sets
+    .filter((x) => x.done !== false).reduce((a, x) => a + (e.timed ? toNum(x.r) || 0 : 0), 0), 0);
+}
+const weekStartOf = (d) => dayStart(d) - ((d.getDay() + 6) % 7) * 864e5; // Monday 00:00
+function weekStats(ws) {
+  const we = ws + 7 * 864e5, r = { gym: 0, pt: 0, jogMin: 0, days: [] };
+  db.sessions.forEach((s) => {
+    const t = new Date(s.date).getTime(); if (t < ws || t >= we) return;
+    const k = kindOf(s);
+    if (isGym(k)) { r.gym += 1; r.days.push(k); }
+    if (k === 'pt') r.pt += 1;
+    r.jogMin += jogSecs(s) / 60;
+  });
+  r.jogMin = Math.round(r.jogMin);
+  return r;
+}
+/** Up next = the first gym day not done yet this week; once all are done, keep rotating. */
 function nextDay() {
-  if (!db.routine.length) return null;
-  const last = sortedSessions().find((s) => db.routine.some((d) => d.id === s.dayId));
-  if (!last) return db.routine[0];
-  const i = db.routine.findIndex((d) => d.id === last.dayId);
-  return db.routine[(i + 1) % db.routine.length];
+  const gym = db.routine.filter((d) => dayKind(d) !== 'cardio');
+  const pool = gym.length ? gym : db.routine;
+  if (!pool.length) return null;
+  const ws = weekStartOf(new Date());
+  const doneThisWeek = new Set(db.sessions.filter((s) => new Date(s.date).getTime() >= ws).map((s) => s.dayId));
+  const open = pool.find((d) => !doneThisWeek.has(d.id));
+  if (open) return open;
+  const last = sortedSessions().find((s) => pool.some((d) => d.id === s.dayId));
+  if (!last) return pool[0];
+  return pool[(pool.findIndex((d) => d.id === last.dayId) + 1) % pool.length];
 }
 function lastDoneOf(dayId) { return sortedSessions().find((s) => s.dayId === dayId); }
 function knownNames() {
@@ -201,7 +256,7 @@ function startWorkout(dayId) {
   if (db.active) { go('train'); return; }
   const day = db.routine.find((d) => d.id === dayId);
   db.active = {
-    id: uid(), dayId: day ? day.id : null, dayName: day ? day.name : 'Workout',
+    id: uid(), dayId: day ? day.id : null, dayName: day ? day.name : 'Workout', kind: day ? dayKind(day) : 'self',
     startedAt: Date.now(), pausedAt: null, pausedMs: 0, setTimer: null,
     entries: day ? day.exercises.map(entryFrom) : [],
   };
@@ -238,7 +293,7 @@ function finishFlow() {
       const upd = $('#upd-routine') && $('#upd-routine').checked;
       if (nSets) {
         db.sessions.push({
-          id: a.id, dayId: a.dayId, dayName: a.dayName, date: localISO(new Date(a.startedAt)), duration: elapsed(a),
+          id: a.id, dayId: a.dayId, dayName: a.dayName, kind: a.kind || 'self', date: localISO(new Date(a.startedAt)), duration: elapsed(a),
           entries: done.map((e) => ({ name: e.name, timed: e.timed, sets: e.sets.map((s) => ({ w: s.w, r: s.r, done: true })) })),
         });
         if (upd) updateRoutineFrom(a.dayId, done);
@@ -340,33 +395,195 @@ function thumb(name, size = 'md') {
   return '';
 }
 
+// ---------------------------------------------------------------- body scans
+const fmt1 = (v) => (v == null || v === '' ? '—' : (+v).toFixed(1));
+const avg2 = (a, b) => { const x = toNum(a), y = toNum(b); return x != null && y != null ? (x + y) / 2 : x ?? y; };
+const sortedScans = () => [...db.scans].sort((a, b) => (a.date < b.date ? -1 : 1));
+// [key, chip label, long label, unit ('w' = weight unit)]
+const BODY = [
+  ['smm', 'Muscle', 'Skeletal muscle', 'w'], ['weight', 'Weight', 'Weight', 'w'], ['fat', 'Fat %', 'Body fat', '%'],
+  ['lbm', 'Lean', 'Lean body mass', 'w'], ['arms', 'Arms', 'Arm lean mass (avg L/R)', 'w'], ['legs', 'Legs', 'Leg lean mass (avg L/R)', 'w'],
+];
+const SCAN_FIELDS = [
+  ['weight', 'Weight', 'w'], ['smm', 'Skeletal muscle', 'w'], ['fat', 'Body fat', '%'], ['lbm', 'Lean body mass', 'w'],
+  ['armL', 'Left arm lean', 'w'], ['armR', 'Right arm lean', 'w'], ['legL', 'Left leg lean', 'w'], ['legR', 'Right leg lean', 'w'],
+];
+function bodyVal(s, k) {
+  if (k === 'arms') return avg2(s.armL, s.armR);
+  if (k === 'legs') return avg2(s.legL, s.legR);
+  return toNum(s[k]);
+}
+/** Muscle goal = first scan's skeletal muscle + goals.muscleKg. */
+function bodyGoal(sc) {
+  const withM = sc.filter((s) => toNum(s.smm) != null);
+  if (!withM.length) return { target: null, gained: 0 };
+  const base = toNum(withM[0].smm), latest = toNum(withM[withM.length - 1].smm);
+  return { base, latest, target: base + (toNum(db.goals.muscleKg) || 0), gained: latest - base };
+}
+function nextScanText(latest) {
+  const due = new Date(latest.date).getTime() + 56 * 864e5; // every ~8 weeks
+  return due > Date.now() ? `due ${shortDate(due)}` : 'due now';
+}
+
+function scanModal(scan) {
+  const isNew = !scan;
+  const now = new Date(); now.setHours(8, 0, 0, 0);
+  const s = scan ? clone(scan) : { id: uid(), date: localISO(now) };
+  const d = new Date(s.date);
+  const u = (x) => (x === 'w' ? unit() : x);
+  openModal(`
+    <div class="row"><h3 class="grow">${isNew ? 'Add body scan' : 'Edit body scan'}</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
+    <p class="small muted">Copy the numbers from your scan sheet. Leave anything you don’t have blank.</p>
+    <div style="margin-top:10px"><label class="lbl">Date</label><input type="date" class="field" id="sc-date" value="${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}"></div>
+    <div class="scan-grid">${SCAN_FIELDS.map(([k, l, un]) => `<div><label class="lbl">${l} <span class="faint">${u(un)}</span></label>
+      <input class="field" id="sc-${k}" value="${esc(s[k] ?? '')}" inputmode="decimal"></div>`).join('')}</div>
+    <div style="margin-top:10px"><label class="lbl">Notes</label><input class="field" id="sc-notes" value="${esc(s.notes || '')}" placeholder="e.g. Evolt 360, morning, before eating"></div>
+    <div class="actions">${isNew ? '<button class="btn" data-act="m:close">Cancel</button>' : '<button class="btn danger" data-act="m:del">Delete</button>'}
+      <button class="btn primary" data-act="m:save">Save</button></div>`,
+  {
+    close: closeModal,
+    del: async () => {
+      if (await confirmBox({ title: 'Delete this scan?', ok: 'Delete', danger: true })) { db.scans = db.scans.filter((x) => x.id !== s.id); save(); renderView(); }
+    },
+    save: () => {
+      const dv = $('#sc-date').value;
+      if (dv) { const [y, m, dd] = dv.split('-').map(Number); s.date = localISO(new Date(y, m - 1, dd, 8)); }
+      SCAN_FIELDS.forEach(([k]) => { const v = toNum($(`#sc-${k}`).value); if (v == null) delete s[k]; else s[k] = v; });
+      s.notes = $('#sc-notes').value.trim();
+      if (s.weight == null && s.smm == null) { toast('Enter at least weight or skeletal muscle'); return; }
+      const i = db.scans.findIndex((x) => x.id === s.id);
+      if (i >= 0) db.scans[i] = s; else db.scans.push(s);
+      save(); closeModal(); toast('Scan saved'); ui.tab = 'progress'; ui.progressMode = 'body'; render();
+    },
+  });
+}
+
+// ---------------------------------------------------------------- quick log: jog / class
+function quickLogModal(kind) {
+  const isJog = kind === 'jog';
+  const today = new Date();
+  const dv = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  openModal(`
+    <div class="row"><h3 class="grow">${isJog ? 'Log a jog' : 'Log a class'}</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
+    <div class="seg full" style="margin-top:10px"><button class="${isJog ? 'on' : ''}" data-act="m:jog">Jog</button><button class="${isJog ? '' : 'on'}" data-act="m:cls">Class</button></div>
+    ${isJog ? '' : `<div style="margin-top:12px"><label class="lbl">Class</label><input class="field" id="ql-name" placeholder="e.g. Pilates, Body Pump, Spin" autofocus></div>`}
+    <div class="row" style="margin-top:12px">
+      <div class="grow"><label class="lbl">Date</label><input type="date" class="field" id="ql-date" value="${dv}" max="${dv}"></div>
+      <div style="width:96px"><label class="lbl">Minutes</label><input class="field" id="ql-min" inputmode="numeric" value="45" ${isJog ? 'autofocus' : ''}></div>
+      ${isJog ? '<div style="width:96px"><label class="lbl">km <span class="faint">optional</span></label><input class="field" id="ql-km" inputmode="decimal"></div>' : ''}
+    </div>
+    <p class="small muted" style="margin-top:10px">${isJog ? `Counts toward your ${db.goals.jogMin} min jogging target. Tip: you can also start the <b>Jog</b> day to use a timer.` : 'Counts as one of your weekly gym sessions.'}</p>
+    <div class="actions"><button class="btn" data-act="m:close">Cancel</button><button class="btn primary" data-act="m:save">Save</button></div>`,
+  {
+    close: closeModal,
+    jog: () => quickLogModal('jog'),
+    cls: () => quickLogModal('class'),
+    save: () => {
+      const min = toNum($('#ql-min').value);
+      if (!min || min <= 0) { toast('Enter the minutes'); $('#ql-min').focus(); return; }
+      const [y, m, d] = ($('#ql-date').value || dv).split('-').map(Number);
+      const isToday = y === today.getFullYear() && m === today.getMonth() + 1 && d === today.getDate();
+      const when = isToday ? new Date(Date.now() - min * 60000) : new Date(y, m - 1, d, 12);
+      const name = isJog ? 'Jog' : (($('#ql-name') && $('#ql-name').value.trim()) || 'Class');
+      const km = isJog ? toNum($('#ql-km').value) : null;
+      const s = {
+        id: uid(), dayId: null, dayName: name, kind: isJog ? 'cardio' : 'class', date: localISO(when), duration: Math.round(min * 60000),
+        entries: [{ name, timed: true, sets: [{ w: 'BW', r: String(Math.round(min * 60)), done: true }] }],
+      };
+      if (km) s.distance = km;
+      db.sessions.push(s); save(); closeModal(); toast(isJog ? `Jog logged · ${Math.round(min)} min` : `${name} logged`); renderView();
+    },
+  });
+}
+const pace = (s) => {
+  const secs = jogSecs(s) || (s.duration || 0) / 1000;
+  if (!s.distance || !secs) return '';
+  const p = Math.round(secs / s.distance);
+  return `${Math.floor(p / 60)}:${pad(p % 60)}/km`;
+};
+
 // ---------------------------------------------------------------- views
 const views = {};
 
 views.train = () => (db.active ? activeView() : idleView());
 
+const meter = (v, max) => `<div class="meter" role="presentation"><span style="width:${Math.max(0, Math.min(100, max ? (v / max) * 100 : 0))}%"></span></div>`;
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+/** This week's targets: gym sessions (PT + own/class) and jogging minutes, plus the last 6 weeks. */
+function weekCard() {
+  const g = db.goals, now = new Date(), ws = weekStartOf(now), w = weekStats(ws);
+  const daysLeft = 6 - ((now.getDay() + 6) % 7);
+  const gymLeft = Math.max(0, g.sessions - w.gym), jogLeft = Math.max(0, g.jogMin - w.jogMin);
+  let hint;
+  if (!gymLeft && !jogLeft) hint = '<b style="color:var(--accent)">Both weekly targets hit.</b> Nice work.';
+  else {
+    const todo = [];
+    if (gymLeft) todo.push(plural(gymLeft, 'gym session'));
+    if (jogLeft) todo.push(`${jogLeft} min jogging${jogLeft > 60 ? ` (≈ ${Math.ceil(jogLeft / 60)} × ${Math.round(jogLeft / Math.ceil(jogLeft / 60) / 5) * 5} min)` : ''}`);
+    hint = `To go: ${todo.join(' · ')} — ${daysLeft ? `${plural(daysLeft, 'day')} left after today` : 'last day of the week'}`;
+  }
+  const past = [6, 5, 4, 3, 2, 1].map((i) => {
+    const s = ws - i * 7 * 864e5, st = weekStats(s);
+    const hit = st.gym >= g.sessions && st.jogMin >= g.jogMin;
+    return `<div class="wk ${hit ? 'hit' : ''}" title="Week of ${shortDate(s)}: ${st.gym} gym sessions, ${st.jogMin} min jogging">
+      <span class="wk-d">${shortDate(s)}</span><span class="num">${st.gym}/${g.sessions}</span><span class="num">${st.jogMin}m</span></div>`;
+  }).join('');
+  return `<section class="card week">
+    <div class="row"><b class="grow">This week</b><span class="small muted num">${shortDate(ws)} – ${shortDate(ws + 6 * 864e5)}</span></div>
+    <div class="goal"><div class="row"><span class="grow">Gym sessions</span><span class="num"><b>${w.gym}</b> / ${g.sessions}</span></div>
+      ${meter(w.gym, g.sessions)}<div class="small muted">PT ${w.pt}/${g.pt}${w.days.length ? ` · ${w.days.map((k) => KINDS[k]).join(', ')}` : ''}</div></div>
+    <div class="goal"><div class="row"><span class="grow">Jogging</span><span class="num"><b>${w.jogMin}</b> / ${g.jogMin} min</span></div>
+      ${meter(w.jogMin, g.jogMin)}</div>
+    <div class="small muted" style="margin-top:10px">${hint}</div>
+    <div class="row" style="margin-top:12px;flex-wrap:wrap">
+      <button class="btn sm soft" data-act="quick-log" data-k="jog">+ Log a jog</button>
+      <button class="btn sm soft" data-act="quick-log" data-k="class">+ Log a class</button></div>
+    <div class="lbl" style="margin-top:14px">Past weeks <span class="faint">· gym / jog</span></div>
+    <div class="wks">${past}</div>
+  </section>`;
+}
+
+/** Small muscle-goal card from the body scans. */
+function muscleCard() {
+  const sc = sortedScans();
+  if (!sc.length) {
+    return `<button class="card day-card" data-act="go-body"><div class="grow"><div class="title">Muscle goal</div>
+      <div class="sub">Add your body scan to track skeletal muscle toward +${db.goals.muscleKg} kg</div></div><span class="chev faint">${ICON.chev}</span></button>`;
+  }
+  const g = bodyGoal(sc), latest = sc[sc.length - 1];
+  return `<button class="card day-card" data-act="go-body"><div class="grow">
+      <div class="row"><span class="title grow">Muscle goal</span><span class="num small"><b>${fmt1(latest.smm)}</b> / ${fmt1(g.target)} kg</span></div>
+      ${meter(g.gained, db.goals.muscleKg)}
+      <div class="sub">${g.gained >= 0 ? '+' : '−'}${fmt1(Math.abs(g.gained))} of +${db.goals.muscleKg} kg skeletal muscle · next scan ${nextScanText(latest)}</div>
+    </div><span class="chev faint">${ICON.chev}</span></button>`;
+}
+
 function idleView() {
   const nd = nextDay();
-  const now = new Date();
-  const weekStart = dayStart(now) - ((now.getDay() + 6) % 7) * 864e5;
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-  const ses = db.sessions.map((s) => new Date(s.date).getTime());
-  const wk = ses.filter((t) => t >= weekStart).length, mo = ses.filter((t) => t >= monthStart).length;
   const last = nd && lastDoneOf(nd.id);
+  const ndKind = nd ? dayKind(nd) : null;
+
+  const notice = db.planNotice ? `<section class="card notice">
+      <b>Your new plan is loaded</b>
+      <div class="small muted" style="margin-top:4px">2 PT days, 1–2 days on your own, and jogging toward ${db.goals.jogMin / 60} h a week. Your previous routine is saved — restore it any time in Settings.</div>
+      <div class="row" style="margin-top:10px"><button class="btn sm soft" data-act="go" data-tab="routine">See routine</button><button class="btn sm ghost" data-act="dismiss-plan">Got it</button></div>
+    </section>` : '';
 
   const hero = nd ? `
     <section class="card hero">
-      <div class="eyebrow">Up next</div>
+      <div class="eyebrow">Up next${ndKind ? ` · ${KINDS[ndKind]}` : ''}</div>
       <h2>${esc(nd.name)}</h2>
       <div class="small muted">${last ? `Last done ${fmtDate(last.date)} · ${relDays(last.date)}` : 'Not done yet'}</div>
       <ul>${nd.exercises.map((x) => `<li data-act="guide" data-name="${esc(x.name)}">${thumb(x.name, 'sm')}<span class="guide-link">${esc(x.name)}</span><span class="num">${summarize(Array.from({ length: +x.sets || 1 }, () => ({ w: x.weight, r: x.reps })), x.timed)}</span></li>`).join('')}</ul>
+      ${ndKind === 'pt' ? '<p class="small muted" style="margin:-6px 0 12px">Your PT may swap exercises — rename one with ⋯ or add new ones during the workout. Weights you log become next time’s targets.</p>' : ''}
       <button class="btn primary big" data-act="start" data-day="${nd.id}">Start workout</button>
     </section>` : `<div class="card empty">No routine yet. Add training days in <b>Routine</b>.</div>`;
 
   const others = db.routine.filter((d) => !nd || d.id !== nd.id).map((d) => {
-    const l = lastDoneOf(d.id);
+    const l = lastDoneOf(d.id), k = dayKind(d);
     return `<button class="card day-card" data-act="start" data-day="${d.id}">
-      <div class="grow"><div class="title">${esc(d.name)}</div>
+      <div class="grow"><div class="title">${esc(d.name)}${k === 'cardio' ? ' <span class="pill">timer</span>' : ''}</div>
       <div class="sub">${d.exercises.map((x) => esc(x.name)).join(' · ') || 'No exercises'}</div></div>
       <span class="faint small">${l ? relDays(l.date) : ''}</span><span class="chev faint">${ICON.chev}</span></button>`;
   }).join('');
@@ -374,14 +591,13 @@ function idleView() {
   return {
     title: '<h1>Train</h1>',
     body: `<div class="stack">
-      <div class="stats">
-        <div class="stat"><div class="v num">${wk}</div><div class="k">This week</div></div>
-        <div class="stat"><div class="v num">${mo}</div><div class="k">This month</div></div>
-        <div class="stat"><div class="v num">${db.sessions.length}</div><div class="k">All time</div></div>
-      </div>
+      ${notice}
+      ${weekCard()}
       ${hero}
     </div>
     ${others ? `<div class="section-title">Other days</div><div class="stack">${others}</div>` : ''}
+    <div class="section-title">Body</div>
+    <div class="stack">${muscleCard()}</div>
     <div class="section-title">More</div>
     <div class="stack">
       <button class="btn big" data-act="start" data-day="">Start empty workout</button>
@@ -453,13 +669,15 @@ views.history = () => {
     const m = d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
     if (m !== month) { html += `<div class="section-title">${m}</div>`; month = m; }
     html += `<button class="card sess" data-act="edit-session" data-id="${s.id}" style="margin-bottom:10px">
-      <div class="row"><span class="d grow">${fmtDate(s.date)}</span>${s.duration ? `<span class="pill num">${fmtDur(s.duration)}</span>` : ''}</div>
-      <div class="small muted">${esc(s.dayName || 'Workout')}</div>
+      <div class="row"><span class="d grow">${fmtDate(s.date)}</span>
+        ${s.distance ? `<span class="pill num">${s.distance} km${pace(s) ? ` · ${pace(s)}` : ''}</span>` : ''}
+        ${s.duration ? `<span class="pill num">${fmtDur(s.duration)}</span>` : ''}</div>
+      <div class="small muted">${esc(s.dayName || 'Workout')} <span class="faint">· ${KINDS[kindOf(s)]}</span></div>
       <div class="ex-list">${s.entries.map((e) => `${esc(e.name)} <span class="faint">— ${summarize(e.sets, e.timed)}</span>`).join('<br>')}</div>
     </button>`;
   });
   return {
-    title: '<h1>History</h1><button class="btn sm soft" data-act="log-past">+ Log past</button>',
+    title: '<h1>History</h1><button class="btn sm soft" data-act="quick-log" data-k="jog">+ Jog</button><button class="btn sm soft" data-act="log-past">+ Log past</button>',
     body: html || '<div class="card empty">No workouts logged yet.</div>',
   };
 };
@@ -481,7 +699,58 @@ function metricsFor(name) {
   return rows;
 }
 
+const modeSeg = () => `<div class="seg full" role="tablist" style="margin-bottom:12px">
+  <button class="${ui.progressMode === 'ex' ? 'on' : ''}" data-act="progress-mode" data-m="ex">Exercises</button>
+  <button class="${ui.progressMode === 'body' ? 'on' : ''}" data-act="progress-mode" data-m="body">Body</button></div>`;
 views.progress = () => {
+  const v = ui.progressMode === 'body' ? bodyView() : exerciseProgress();
+  return { title: v.title, body: modeSeg() + v.body };
+};
+
+function bodyView() {
+  const sc = sortedScans();
+  const title = '<h1>Progress</h1><button class="btn sm soft" data-act="add-scan">+ Scan</button>';
+  const fuel = `<div class="card small muted" style="line-height:1.6"><b style="color:var(--text)">Daily fuel for muscle gain</b><br>
+    About <b class="num" style="color:var(--text)">${Number(db.goals.kcal).toLocaleString()} kcal</b> and <b class="num" style="color:var(--text)">${db.goals.protein} g protein</b> a day, protein spread over 3–4 meals.
+    Add ~200–300 kcal on long jog days. If your weight hasn’t gone up after 4 weeks, add 100–150 kcal. Change these in Settings.</div>`;
+  if (!sc.length) {
+    return { title, body: `<div class="stack"><div class="card empty">No body scans yet.<br><span class="small">Add your Evolt or InBody results to track skeletal muscle toward your +${db.goals.muscleKg} kg goal.</span>
+      <div style="margin-top:12px"><button class="btn primary" data-act="add-scan">Add body scan</button></div></div>${fuel}</div>` };
+  }
+  const k = BODY.some((b) => b[0] === ui.bodyMetric) ? ui.bodyMetric : 'smm';
+  const meta = BODY.find((b) => b[0] === k), un = meta[3] === 'w' ? unit() : '%';
+  const fmtV = (v) => (v == null ? '—' : `${fmt1(v)} ${un}`);
+  const pts = sc.filter((s) => bodyVal(s, k) != null).map((s) => ({ t: new Date(s.date).getTime(), v: bodyVal(s, k), label: shortDate(s.date) }));
+  const g = bodyGoal(sc), latest = sc[sc.length - 1];
+  const target = k === 'smm' ? g.target : null;
+  ui.chart = { pts, fmtV };
+  const first = pts.length ? pts[0].v : null, last = pts.length ? pts[pts.length - 1].v : null;
+  const delta = first != null && pts.length > 1 ? last - first : null;
+  const goalCard = g.target != null ? `<div class="card">
+      <div class="row"><b class="grow">Muscle goal</b><span class="num small">${fmt1(g.base)} → <b>${fmt1(g.target)}</b> ${unit()}</span></div>
+      ${meter(g.gained, db.goals.muscleKg)}
+      <div class="small muted">${g.gained >= 0 ? '+' : '−'}${fmt1(Math.abs(g.gained))} of +${db.goals.muscleKg} ${unit()} skeletal muscle · next scan ${nextScanText(latest)}.
+        Realistic pace: about 0.2–0.4 ${unit()} of muscle a month.</div></div>` : '';
+  return {
+    title,
+    body: `<div class="stack">
+      ${goalCard}
+      <div class="seg full" role="tablist">${BODY.map(([key, l]) => `<button class="${key === k ? 'on' : ''}" data-act="body-metric" data-k="${key}">${l}</button>`).join('')}</div>
+      <div class="stats">
+        <div class="stat"><div class="v num">${fmtV(last)}</div><div class="k">${meta[2]}</div></div>
+        <div class="stat"><div class="v num">${delta == null ? '—' : (delta > 0 ? '+' : delta < 0 ? '−' : '±') + fmt1(Math.abs(delta))}</div><div class="k">Since ${pts.length ? shortDate(pts[0].t) : 'start'}</div></div>
+        <div class="stat"><div class="v num">${sc.length}</div><div class="k">Scan${sc.length === 1 ? '' : 's'}</div></div>
+      </div>
+      <div class="card chart-wrap">${pts.length ? chartSVG(pts, undefined, target) : '<div class="empty">No values for this measure yet — edit a scan to add them.</div>'}<div class="tip" hidden></div></div>
+      <div class="card"><table class="tbl"><thead><tr><th>Date</th><th class="r">Weight</th><th class="r">Muscle</th><th class="r">Fat %</th></tr></thead><tbody>
+        ${[...sc].reverse().map((s) => `<tr class="tap" data-act="edit-scan" data-id="${s.id}"><td>${shortDate(s.date)}</td><td class="r">${fmt1(s.weight)}</td><td class="r">${fmt1(s.smm)}</td><td class="r">${fmt1(s.fat)}</td></tr>`).join('')}
+      </tbody></table><div class="small faint" style="margin-top:8px">Tap a row to edit. Scan at the same time of day, before eating, for comparable numbers.</div></div>
+      ${fuel}
+    </div>`,
+  };
+}
+
+function exerciseProgress() {
   const names = knownNames().filter((n) => db.sessions.some((s) => s.entries.some((e) => norm(e.name) === norm(n))));
   if (!names.length) return { title: '<h1>Progress</h1>', body: '<div class="card empty">Log a workout to see progress.</div>' };
   if (!ui.progressEx || !names.some((n) => norm(n) === norm(ui.progressEx))) ui.progressEx = names[0];
@@ -532,7 +801,7 @@ views.progress = () => {
       </tbody></table></div>
     </div>`,
   };
-};
+}
 
 function niceTicks(lo, hi, n = 4) {
   if (lo === hi) { hi = hi > 0 ? hi * 1.2 : 1; lo = 0; } // flat series: show it against zero, not a ±1 zoom
@@ -543,11 +812,12 @@ function niceTicks(lo, hi, n = 4) {
   return out;
 }
 const CH = { W: 640, H: 240, L: 44, R: 16, T: 16, B: 30 };
-function chartSVG(pts, axisFmt = (v) => +v.toFixed(2)) {
+function chartSVG(pts, axisFmt = (v) => +v.toFixed(2), target = null) {
   const { W, H, L, R, T, B } = CH;
   let x0 = pts[0].t, x1 = pts[pts.length - 1].t;
   if (x0 === x1) { x0 -= 3 * 864e5; x1 += 3 * 864e5; }
-  const ticks = niceTicks(Math.min(...pts.map((p) => p.v)), Math.max(...pts.map((p) => p.v)));
+  const vals = pts.map((p) => p.v).concat(target != null ? [target] : []);
+  const ticks = niceTicks(Math.min(...vals), Math.max(...vals));
   const lo = ticks[0], hi = ticks[ticks.length - 1];
   const X = (t) => L + ((t - x0) / (x1 - x0)) * (W - L - R);
   const Y = (v) => T + (1 - (v - lo) / (hi - lo || 1)) * (H - T - B);
@@ -559,7 +829,9 @@ function chartSVG(pts, axisFmt = (v) => +v.toFixed(2)) {
   const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('');
   const area = pts.length > 1 ? `<path class="area" d="${line}L${pts[pts.length - 1].x.toFixed(1)},${Y(lo)}L${pts[0].x.toFixed(1)},${Y(lo)}Z"/>` : '';
   const dots = pts.map((p, i) => `<circle class="pt" data-i="${i}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4"/>`).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Progress chart">${grid}${xl}${area}
+  const goal = target != null ? `<line class="goal-line" x1="${L}" x2="${W - R}" y1="${Y(target)}" y2="${Y(target)}"/>
+    <text class="axis goal-l" x="${W - R - 4}" y="${Y(target) - 6}" text-anchor="end">Goal ${+target.toFixed(1)}</text>` : '';
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Progress chart">${grid}${goal}${xl}${area}
     <path class="line" d="${line}"/><line class="cross" y1="${T}" y2="${H - B}" visibility="hidden"/>${dots}
     <rect x="${L}" y="0" width="${W - L - R}" height="${H}" fill="transparent" data-hit/></svg>`;
 }
@@ -597,11 +869,14 @@ views.routine = () => {
   const days = db.routine.map((d, di) => `
     <details class="card day-edit" data-di="${di}" ${ui.openDays.has(d.id) ? 'open' : ''}>
       <summary><span class="chev">${ICON.chev}</span><div class="grow"><div style="font-weight:700" data-dayname="${di}">${esc(d.name)}</div>
-        <div class="small muted">${d.exercises.length} exercise${d.exercises.length === 1 ? '' : 's'}</div></div>
+        <div class="small muted">${KINDS[dayKind(d)]} · ${d.exercises.length} exercise${d.exercises.length === 1 ? '' : 's'}</div></div>
         <button class="btn sm soft" data-act="start" data-day="${d.id}">Start</button></summary>
       <div style="margin-top:12px">
-        <label class="lbl">Day name</label>
-        <input class="field" data-bind="rday" data-di="${di}" value="${esc(d.name)}">
+        <div class="row" style="align-items:flex-end">
+          <div class="grow"><label class="lbl">Day name</label><input class="field" data-bind="rday" data-di="${di}" value="${esc(d.name)}"></div>
+          <div style="width:136px"><label class="lbl">Type</label><select class="field" data-bind="rkind" data-di="${di}">
+            ${['pt', 'self', 'cardio'].map((k) => `<option value="${k}" ${dayKind(d) === k ? 'selected' : ''}>${KINDS[k]}</option>`).join('')}</select></div>
+        </div>
         <div style="margin-top:12px">${d.exercises.map((x, xi) => exEditor(x, di, xi, d.exercises.length)).join('')}</div>
         <button class="btn soft" style="width:100%" data-act="rx-add" data-di="${di}">+ Add exercise</button>
         <div class="row" style="margin-top:12px">
@@ -614,7 +889,20 @@ views.routine = () => {
     </details>`).join('');
   return {
     title: '<h1>Routine</h1>',
-    body: `<p class="small muted" style="margin:0 2px 12px">Days rotate in this order — “Up next” on Train is the day after your last workout. Weight, reps and sets here are the starting values when you begin a workout.</p>
+    body: `<div class="card week-plan">
+        <b>Suggested week</b>
+        <table class="tbl plan"><tbody>
+          <tr><td>Mon</td><td>PT 1 — shoulders, chest, back</td></tr>
+          <tr><td>Tue</td><td>Jog 60 min, easy</td></tr>
+          <tr><td>Wed</td><td>Self — arms &amp; upper (+ optional 30 min easy jog)</td></tr>
+          <tr><td>Thu</td><td>PT 2 — lower body</td></tr>
+          <tr><td>Fri</td><td>Rest</td></tr>
+          <tr><td>Sat</td><td>Self — glutes &amp; legs, or a class</td></tr>
+          <tr><td>Sun</td><td>Jog 60–90 min, easy</td></tr>
+        </tbody></table>
+        <div class="small muted" style="margin-top:8px">Any order works — the Train tab tracks your weekly totals. Keep most jogs easy, and avoid a hard run the day before PT 2. Add weight once you hit the top of the rep range on every set.</div>
+      </div>
+      <p class="small muted" style="margin:14px 2px 12px">“Up next” on Train is the first gym day you haven’t done this week. Weight, reps and sets here are the starting values when you begin a workout.</p>
       <div class="stack">${days}</div>
       <button class="btn big soft" style="margin-top:14px" data-act="day-add">+ Add training day</button>
       <datalist id="ex-names">${knownNames().map((n) => `<option value="${esc(n)}">`).join('')}</datalist>`,
@@ -662,9 +950,19 @@ views.settings = () => {
       ${sw('keepAwake', 'Keep screen awake', 'During a workout, so timers stay visible')}
       <div class="setting"><div class="grow"><div>Appearance</div></div>${seg('theme', [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']])}</div>
     </div>
+    <div class="section-title">Goals</div>
+    <div class="card flush">
+      ${[['sessions', 'Gym sessions a week', 'PT days + your own sessions + classes'], ['pt', 'PT sessions a week', ''],
+        ['jogMin', 'Jogging minutes a week', '180 = 3 hours. If you’re new to jogging, build up ~15 min a week'],
+        ['muscleKg', 'Muscle to gain (kg)', 'Added to your first body scan’s skeletal muscle'],
+        ['kcal', 'Calories a day', 'Reminder only'], ['protein', 'Protein a day (g)', 'Reminder only']]
+        .map(([k, t, sub]) => `<div class="setting"><div class="grow"><div>${t}</div>${sub ? `<div class="small muted">${sub}</div>` : ''}</div>
+        <input class="field" style="width:84px;text-align:center" data-bind="goal" data-k="${k}" value="${esc(db.goals[k])}" inputmode="decimal"></div>`).join('')}
+    </div>
     <div class="section-title">Your data</div>
     <div class="card flush">
-      <div class="setting"><div class="grow"><div>Stored on this device</div><div class="small muted">${db.sessions.length} workouts · ${db.routine.length} training days. Each device keeps its own copy — use backup files to move data between your phone and Mac.</div></div></div>
+      ${db.prevRoutine ? `<div class="setting"><div class="grow"><div>Previous routine</div><div class="small muted">Swap back to the routine you had before the PT plan (the current one is kept for swapping again)</div></div><button class="btn sm" data-act="swap-routine">Swap</button></div>` : ''}
+      <div class="setting"><div class="grow"><div>Stored on this device</div><div class="small muted">${db.sessions.length} workouts · ${db.scans.length} body scans · ${db.routine.length} training days. Each device keeps its own copy — use backup files to move data between your phone and Mac.</div></div></div>
       <div class="setting"><div class="grow"><div>Export backup</div><div class="small muted">Save everything as a .json file</div></div><button class="btn sm" data-act="export">Export</button></div>
       <div class="setting"><div class="grow"><div>Import backup</div><div class="small muted">Merge or replace from a .json file</div></div>
         <label class="btn sm" style="position:relative;overflow:hidden">Import<input type="file" accept="application/json,.json" data-bind="import" style="position:absolute;inset:0;opacity:0"></label></div>
@@ -697,6 +995,11 @@ function renderEditor() {
     <div class="row" style="margin-top:12px">
       <div class="grow"><label class="lbl">Date</label><input type="date" class="field" data-bind="ed-date" value="${dateVal}"></div>
       <div style="width:120px"><label class="lbl">Duration (min)</label><input class="field" data-bind="ed-dur" inputmode="numeric" value="${s.duration ? Math.round(s.duration / 60000) : ''}" placeholder="—"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div class="grow"><label class="lbl">Type</label><select class="field" data-bind="ed-kind">
+        ${Object.keys(KINDS).map((k) => `<option value="${k}" ${kindOf(s) === k ? 'selected' : ''}>${KINDS[k]}</option>`).join('')}</select></div>
+      ${jogSecs(s) || kindOf(s) === 'cardio' ? `<div style="width:120px"><label class="lbl">Distance (km)</label><input class="field" data-bind="ed-dist" inputmode="decimal" value="${s.distance ?? ''}" placeholder="—"></div>` : ''}
     </div>
     ${s.entries.map((e, ei) => `
       <div class="card ex" style="margin-top:12px">
@@ -888,6 +1191,18 @@ document.addEventListener('click', async (ev) => {
     case 'log-past': logPastModal(); break;
 
     case 'metric': ui.metric = t.dataset.k; renderView(); break;
+    case 'progress-mode': ui.progressMode = t.dataset.m; renderView(); break;
+    case 'body-metric': ui.bodyMetric = t.dataset.k; renderView(); break;
+    case 'add-scan': scanModal(null); break;
+    case 'edit-scan': scanModal(db.scans.find((s) => s.id === t.dataset.id)); break;
+    case 'go-body': ui.progressMode = 'body'; go('progress'); window.scrollTo(0, 0); break;
+    case 'quick-log': quickLogModal(t.dataset.k); break;
+    case 'dismiss-plan': db.planNotice = false; save(); renderView(); break;
+    case 'swap-routine':
+      if (await confirmBox({ title: 'Swap routines?', body: 'Your current routine is kept, so you can swap back here any time. History isn’t affected.', ok: 'Swap' })) {
+        [db.routine, db.prevRoutine] = [db.prevRoutine, db.routine]; db.planNotice = false; save(); toast('Routine swapped'); render();
+      }
+      break;
 
     case 'day-add': {
       const d = { id: uid(), name: `Day ${db.routine.length + 1}`, exercises: [] };
@@ -978,6 +1293,10 @@ function onBind(el) {
     case 'progress-ex': ui.progressEx = val; ui.metric = null; renderView(); break;
     case 'ed-date': { if (!val) break; const old = new Date(ui.editing.s.date); const [y, m, d] = val.split('-').map(Number); ui.editing.s.date = localISO(new Date(y, m - 1, d, old.getHours(), old.getMinutes())); break; }
     case 'ed-dur': ui.editing.s.duration = (toNum(val) || 0) * 60000; break;
+    case 'ed-kind': ui.editing.s.kind = val; break;
+    case 'ed-dist': { const v = toNum(val); if (v) ui.editing.s.distance = v; else delete ui.editing.s.distance; break; }
+    case 'rkind': db.routine[+el.dataset.di].kind = val; save(); renderView(); break;
+    case 'goal': { const v = toNum(val); if (v != null && v >= 0) { db.goals[el.dataset.k] = v; save(); } break; }
     case 'ed-name': ui.editing.s.entries[+el.dataset.ei].name = val; break;
     case 'ed-set': { const tr = el.closest('tr'); ui.editing.s.entries[+tr.dataset.ei].sets[+tr.dataset.si][el.dataset.f] = val; break; }
     default: break;
@@ -1105,21 +1424,27 @@ function importData(file) {
     try { d = JSON.parse(reader.result); } catch (e) { toast('That file isn’t valid JSON'); return; }
     if (!d || !Array.isArray(d.sessions) || !Array.isArray(d.routine)) { toast('Not a Gym Log backup file'); return; }
     const fresh = d.sessions.filter((s) => !db.sessions.some((x) => x.id === s.id)).length;
+    const scans = Array.isArray(d.scans) ? d.scans : [];
+    const freshScans = scans.filter((s) => !db.scans.some((x) => x.id === s.id)).length;
+    const keepRoutine = (d.plan || 1) < (db.plan || 1);
     openModal(`<h3>Import backup</h3>
-      <p class="muted">The file has ${d.sessions.length} workouts and ${d.routine.length} training days. ${fresh} workouts aren’t on this device yet.</p>
+      <p class="muted">The file has ${plural(d.sessions.length, 'workout')}, ${plural(scans.length, 'body scan')} and ${plural(d.routine.length, 'training day')}. New to this device: ${plural(fresh, 'workout')}, ${plural(freshScans, 'scan')}.
+        ${keepRoutine ? 'Its routine is older than yours, so merging keeps your current routine.' : ''}</p>
       <div class="stack">
-        <button class="btn big primary" data-act="m:merge">Merge — add ${fresh} new workouts, use file’s routine</button>
+        <button class="btn big primary" data-act="m:merge">Merge — add new items${keepRoutine ? '' : ', use file’s routine'}</button>
         <button class="btn big danger" data-act="m:replace">Replace everything on this device</button>
         <button class="btn big ghost" data-act="m:close">Cancel</button></div>`,
     {
       close: closeModal,
       merge: () => {
         db.sessions = db.sessions.concat(d.sessions.filter((s) => !db.sessions.some((x) => x.id === s.id)));
-        db.routine = d.routine; save(); closeModal(); toast(`Imported ${fresh} workouts`); render();
+        db.scans = db.scans.concat(scans.filter((s) => !db.scans.some((x) => x.id === s.id)));
+        if (!keepRoutine) { db.routine = d.routine; if (d.plan) db.plan = d.plan; }
+        save(); closeModal(); toast(`Imported ${fresh} workouts, ${freshScans} scans`); render();
       },
       replace: () => {
         const base = defaults();
-        db = { ...base, ...d, settings: { ...base.settings, ...(d.settings || {}) }, active: db.active, rest: db.rest };
+        db = migrate({ ...base, ...d, plan: d.plan || 1, settings: { ...base.settings, ...(d.settings || {}) }, active: db.active, rest: db.rest });
         delete db.exportedAt; delete db.app;
         save(); closeModal(); toast('Backup restored'); render();
       },

@@ -1,2 +1,63 @@
-// Starting routine from "Workout Schedule.xlsx". Past workouts are imported from a backup file (Settings → Import).
-window.SEED = {"routine":[{"id":"d1","name":"Day 1: Back + Core + Chest","exercises":[{"id":"e11","name":"Butterfly","weight":"BW","reps":"15","sets":5,"rest":60,"timed":false,"notes":""},{"id":"e12","name":"DB Pullover","weight":"3","reps":"15","sets":4,"rest":60,"timed":false,"notes":""},{"id":"e13","name":"Plank","weight":"BW","reps":"60","sets":4,"rest":45,"timed":true,"notes":"Forearm plank, hold for time"},{"id":"e14","name":"Incline Push-up","weight":"BW","reps":"10","sets":5,"rest":60,"timed":false,"notes":""}]},{"id":"d2","name":"Day 2: Legs + Posterior Chain + Arms","exercises":[{"id":"e21","name":"Goblet Squat","weight":"16","reps":"15","sets":4,"rest":60,"timed":false,"notes":""},{"id":"e22","name":"DB Romanian Deadlift","weight":"10","reps":"10","sets":4,"rest":90,"timed":false,"notes":""},{"id":"e23","name":"French Press","weight":"3","reps":"15","sets":5,"rest":60,"timed":false,"notes":"Lying overhead triceps extension"},{"id":"e24","name":"Bulgarian Split Squat","weight":"10","reps":"10","sets":4,"rest":75,"timed":false,"notes":"Rear foot on chair · reps per side"}]},{"id":"d3","name":"Day 3: Shoulders + HIIT","exercises":[{"id":"e31","name":"DB Shoulder Press","weight":"6.5","reps":"10","sets":5,"rest":75,"timed":false,"notes":""},{"id":"e32","name":"Single-Arm Lateral Raise","weight":"3","reps":"10","sets":4,"rest":45,"timed":false,"notes":"Reps per side"},{"id":"e33","name":"Rear Delt Fly","weight":"3","reps":"12","sets":5,"rest":45,"timed":false,"notes":"Thumbs up, hinge ~45°"},{"id":"e34","name":"Overhead","weight":"4.5","reps":"12","sets":5,"rest":60,"timed":false,"notes":""},{"id":"e35","name":"HIIT","weight":"BW","reps":"900","sets":1,"rest":0,"timed":true,"notes":"15–20 min · 3–5 min warm-up, then 20–40s on / 10–20s off × 8–12"}]},{"id":"d4","name":"Day 4/5: Glutes","exercises":[{"id":"e41","name":"Squat","weight":"16","reps":"15","sets":4,"rest":60,"timed":false,"notes":""},{"id":"e42","name":"RDL","weight":"9","reps":"10","sets":4,"rest":90,"timed":false,"notes":""},{"id":"e43","name":"Hip Thrust","weight":"20","reps":"10","sets":4,"rest":60,"timed":false,"notes":""},{"id":"e44","name":"Clam Shell","weight":"pink","reps":"12","sets":4,"rest":45,"timed":false,"notes":"Weight = band color"}]},{"id":"d6","name":"Day 6: Cardio / Walk","exercises":[{"id":"e61","name":"Walk","weight":"BW","reps":"1800","sets":1,"rest":0,"timed":true,"notes":""}]}],"sessions":[]};
+// Training plan (v2): 2 PT days on machines, 1–2 self days, and jogging toward 3 h/week.
+// Goal: +2–3 kg muscle (arms and legs are furthest below range) while staying active.
+// Past workouts and body scans are NOT stored here — they live on each device (Settings → Import).
+// `kind`: 'pt' = with your PT, 'self' = on your own, 'cardio' = counts toward the jogging goal.
+(function () {
+  const x = (id, name, sets, reps, weight, rest, notes = '', timed = false) => ({ id, name, sets, reps, weight, rest, timed, notes });
+  window.SEED = {
+    plan: 2,
+    routine: [
+      {
+        id: 'pt1', kind: 'pt', name: 'PT 1: Shoulders, Chest & Back',
+        exercises: [
+          x('pt1a', 'Machine Chest Press', 3, '10', '', 90, '8–12 reps · PT sets the weight'),
+          x('pt1b', 'Lat Pulldown', 3, '10', '', 90, '8–12 reps'),
+          x('pt1c', 'Machine Shoulder Press', 3, '10', '', 90, '8–12 reps'),
+          x('pt1d', 'Seated Cable Row', 3, '12', '', 75, '10–12 reps'),
+          x('pt1e', 'Cable Lateral Raise', 3, '12', '', 45, '12–15 reps per side'),
+          x('pt1f', 'Reverse Pec Deck', 3, '15', '', 60, '12–15 reps'),
+        ],
+      },
+      {
+        id: 'pt2', kind: 'pt', name: 'PT 2: Lower Body',
+        exercises: [
+          x('pt2a', 'Leg Press', 4, '10', '', 120, '8–12 reps · PT sets the weight'),
+          x('pt2b', 'Machine Hip Thrust', 4, '10', '', 90, '8–12 reps'),
+          x('pt2c', 'Seated Leg Curl', 3, '12', '', 75, '10–12 reps'),
+          x('pt2d', 'Leg Extension', 3, '12', '', 75, '10–12 reps'),
+          x('pt2e', 'Hip Abduction Machine', 3, '15', '', 60, '15–20 reps'),
+          x('pt2f', 'Machine Calf Raise', 3, '15', '', 60, '12–15 reps, pause at the bottom'),
+        ],
+      },
+      {
+        id: 's1', kind: 'self', name: 'Self: Arms & Upper',
+        exercises: [
+          x('s1a', 'Incline DB Press', 3, '10', '5', 90, '8–12 reps'),
+          x('s1b', 'Single-Arm DB Row', 3, '10', '8', 60, 'Reps per side'),
+          x('s1c', 'Bicep Curl', 3, '10', '4', 60, '8–12 reps'),
+          x('s1d', 'Tricep Pushdown', 3, '12', '', 60, 'Cable · 10–15 reps'),
+          x('s1e', 'Hammer Curl', 3, '12', '4', 60, '10–12 reps'),
+          x('s1f', 'Overhead', 3, '12', '4.5', 60, 'Overhead triceps extension · 10–12 reps'),
+          x('s1g', 'Plank', 3, '45', 'BW', 45, 'Forearm plank, hold for time', true),
+        ],
+      },
+      {
+        id: 's2', kind: 'self', name: 'Self: Glutes & Legs (or a class)',
+        exercises: [
+          x('s2a', 'Goblet Squat', 3, '10', '18', 90, 'Was 16 kg × 15 — go heavier for 8–12'),
+          x('s2b', 'DB Romanian Deadlift', 3, '10', '12', 90, '8–12 reps'),
+          x('s2c', 'Bulgarian Split Squat', 3, '10', '10', 75, 'Rear foot on bench · reps per side'),
+          x('s2d', 'Hip Thrust', 3, '10', '20', 75, '8–12 reps'),
+          x('s2e', 'Clam Shell', 2, '15', 'pink', 45, 'Weight = band colour'),
+        ],
+      },
+      {
+        id: 'jog', kind: 'cardio', name: 'Jog',
+        exercises: [
+          x('joga', 'Jog', 1, '2700', 'BW', 0, 'Easy pace — you can talk in full sentences', true),
+        ],
+      },
+    ],
+    sessions: [],
+  };
+})();

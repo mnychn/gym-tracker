@@ -78,7 +78,7 @@ function defaults() {
   return {
     version: 1,
     plan: seed.plan || 1,
-    settings: { unit: 'kg', defaultRest: 60, sound: true, vibrate: true, keepAwake: true, theme: 'auto' },
+    settings: { name: '', unit: 'kg', defaultRest: 60, sound: true, vibrate: true, keepAwake: true, theme: 'auto' },
     goals: { ...GOAL_DEFAULTS },
     routine: clone(seed.routine),
     sessions: clone(seed.sessions),
@@ -1033,7 +1033,7 @@ function weekCard() {
     }
     db.quest = { ws, stars: st.total }; save();
   }
-  return `<section class="card week quest">
+  return `<section class="card week quest"><div class="q-hero">
     <div class="row"><b class="grow">Weekly quest</b>
       <span class="pill num" title="${q.stars} stars all-time">⭐ Lv ${q.level}</span>
       <span class="pill num ${q.streak ? 'streak' : ''}" title="Gold weeks in a row">🔥 ${q.streak}</span></div>
@@ -1043,16 +1043,17 @@ function weekCard() {
         <div class="small muted">${questLine(st, w, daysLeft)}</div></div>
     </div>
     <div class="q-lv" title="${q.toNext} stars to level ${q.level + 1}"><span style="width:${q.lvPct}%"></span></div>
-    <div class="small faint" style="margin-top:4px">${plural(q.toNext, 'star')} to level ${q.level + 1}${q.streak ? ` · ${plural(q.streak, 'gold week')} in a row` : ' · win gold to start a 🔥 streak'}</div>
-    <div class="goal"><div class="row"><span class="grow">🏋️ Weight lifting${w.classes ? ` <span class="pill">+${plural(w.classes, 'class')}</span>` : ''}</span><span class="num"><b>${w.gym}</b> / ${g.sessions}</span></div>
+    <div class="q-lvtxt">${plural(q.toNext, 'star')} to level ${q.level + 1}${q.streak ? ` · ${plural(q.streak, 'gold week')} in a row` : ' · win gold to start a 🔥 streak'}</div>
+    </div>
+    <div class="q-tiles"><div class="goal tile-lav"><div class="row"><span class="grow">🏋️ Weight lifting${w.classes ? ` <span class="pill">+${plural(w.classes, 'class')}</span>` : ''}</span><span class="num"><b>${w.gym}</b> / ${g.sessions}</span></div>
       ${liftBadges(w, g)}</div>
-    <div class="goal"><div class="row"><span class="grow">🏃‍♀️ Jogging</span><span class="num"><b>${w.jogMin}</b> / ${g.jogMin} min</span></div>
-      ${jogRoad(w, st)}</div>
-    <div class="row" style="margin-top:14px;flex-wrap:wrap">
+    <div class="goal tile-peach"><div class="row"><span class="grow">🏃‍♀️ Jogging</span><span class="num"><b>${w.jogMin}</b> / ${g.jogMin} min</span></div>
+      ${jogRoad(w, st)}</div></div>
+    <div class="row q-actions" style="flex-wrap:wrap">
       <button class="btn sm soft" data-act="quick-log" data-k="jog">+ Jog</button>
       <button class="btn sm soft" data-act="quick-log" data-k="class">+ Class</button>
       <button class="btn sm soft" data-act="watch-paste">⌚ From Watch</button></div>
-    <div class="lbl" style="margin-top:16px">Medal shelf <span class="faint">· last 6 weeks</span></div>
+    <div class="lbl q-shelf-l">Medal shelf <span class="faint">· last 6 weeks</span></div>
     ${medalShelf(ws, g)}
   </section>`;
 }
@@ -1255,6 +1256,48 @@ function memIcs() {
   toast('Opening calendar reminders…');
 }
 
+/** Greeting header: "Hello, Name" with today's date. */
+function helloTitle() {
+  const n = (db.settings.name || '').trim(), h = new Date().getHours();
+  const hi = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  return `<div class="hello grow"><div class="hello-hi">${hi}${n ? ',' : ''} 👋</div><h1>${n ? esc(n) : 'Ready to train?'}</h1></div>
+    <span class="date-chip num">${new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</span>`;
+}
+/** This week as day pills: ✓ lifted, 🏃 jogged, ★ class; today ringed; days ahead faint. */
+function weekStrip() {
+  const ws = weekStartOf(new Date()), today = dayStart(new Date());
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const t = ws + i * 864e5, d = new Date(t);
+    const ss = db.sessions.filter((x) => dayStart(new Date(x.date)) === t), ks = ss.map(kindOf);
+    const lift = ks.some((k) => k === 'pt' || k === 'self'), jog = ss.some((x) => jogSecs(x) > 0), cls = ks.includes('class');
+    const icon = lift ? ICON.check : jog ? '🏃‍♀️' : cls ? '★' : t === today ? '<i class="ring"></i>' : t > today ? '<i class="dot"></i>' : '<i class="dash"></i>';
+    const cls2 = `${lift || jog || cls ? 'done' : ''} ${t === today ? 'today' : ''} ${t > today ? 'ahead' : ''}`;
+    const tip = ss.length ? ss.map((x) => x.dayName || 'Workout').join(', ') : t === today ? 'Today' : t > today ? 'Coming up' : 'Rest day';
+    return `<div class="dpill ${cls2}" title="${esc(tip)}"><span class="dp-l">${t === today ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' })}</span><span class="dp-i">${icon}</span></div>`;
+  });
+  return `<div class="strip-h small">Days this week</div><div class="dstrip" role="img" aria-label="This week's training days">${days.join('')}</div>`;
+}
+/** Floating + : quick ways to log something. */
+function quickAdd() {
+  const nd = nextDay();
+  openModal(`<div class="row"><h3 class="grow">Log something</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
+    <div class="qa-grid">
+      ${nd ? `<button class="qa lav" data-act="m:start"><span class="qa-e">🏋️</span><b>Start workout</b><span>${esc(nd.name)}</span></button>` : ''}
+      <button class="qa peach" data-act="m:jog"><span class="qa-e">🏃‍♀️</span><b>Log a jog</b><span>Minutes &amp; km</span></button>
+      <button class="qa mint" data-act="m:cls"><span class="qa-e">💃</span><b>Log a class</b><span>Pilates, yoga…</span></button>
+      <button class="qa sky" data-act="m:watch"><span class="qa-e">⌚</span><b>From Watch</b><span>Paste workout</span></button>
+      <button class="qa plain" data-act="m:past"><span class="qa-e">🗓️</span><b>Log past</b><span>Any earlier day</span></button>
+      <button class="qa plain" data-act="m:scan"><span class="qa-e">📷</span><b>Body scan</b><span>Upload a result</span></button>
+    </div>`, {
+    close: closeModal,
+    start: () => { closeModal(); startWorkout(nd.id); },
+    jog: () => { closeModal(); quickLogModal('jog'); },
+    cls: () => { closeModal(); quickLogModal('class'); },
+    watch: () => { closeModal(); pasteFromWatch(); },
+    past: () => { closeModal(); logPastModal(); },
+    scan: () => { closeModal(); scanModal(); },
+  });
+}
 function idleView() {
   const nd = nextDay();
   const last = nd && lastDoneOf(nd.id);
@@ -1285,8 +1328,8 @@ function idleView() {
   }).join('');
 
   return {
-    title: '<h1>Train</h1>',
-    body: `<div class="stack">
+    title: helloTitle(),
+    body: `${weekStrip()}<div class="stack">
       ${notice}
       ${memUrgent(memInfo()) ? membershipCard() : ''}
       ${weekCard()}
@@ -1902,6 +1945,11 @@ views.settings = () => {
   return {
     title: '<h1>Settings</h1>',
     body: `
+    <div class="section-title">You</div>
+    <div class="card flush">
+      <div class="setting"><div class="grow"><div>Your name</div><div class="small muted">For the greeting on Train</div></div>
+        <input class="field" style="width:150px" data-bind="setting" data-k="name" value="${esc(s.name || '')}" placeholder="Optional" autocomplete="given-name"></div>
+    </div>
     <div class="section-title">Workout</div>
     <div class="card flush">
       <div class="setting"><div class="grow"><div>Weight unit</div><div class="small muted">Label only — numbers aren't converted</div></div>${seg('unit', [['kg', 'kg'], ['lb', 'lb']])}</div>
@@ -2019,6 +2067,7 @@ function applyTheme() {
 function renderView() {
   if (!views[ui.tab]) ui.tab = 'train';
   const v = views[ui.tab]();
+  const fab = $('#fab'); if (fab) fab.hidden = !!db.active || !['train', 'history', 'body'].includes(ui.tab);
   topbar.innerHTML = `<div class="topbar-inner">${v.title}</div>`;
   view.innerHTML = v.body;
   document.querySelectorAll('.tabs button').forEach((b) => {
@@ -2167,6 +2216,7 @@ document.addEventListener('click', async (ev) => {
     case 'go-body': go('body'); window.scrollTo(0, 0); break;
     case 'quick-log': quickLogModal(t.dataset.k); break;
     case 'watch-paste': pasteFromWatch(); break;
+    case 'quick-add': quickAdd(); break;
     case 'watch-setup': watchSetup(); break;
     case 'mem-edit': memModal(); break;
     case 'mem-decide': memDecide(); break;

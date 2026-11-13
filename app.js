@@ -72,7 +72,7 @@ function summarize(sets, timed) {
 
 // ---------------------------------------------------------------- storage
 // Weekly targets + body goal. Calories/protein are reminders only (not tracked).
-const GOAL_DEFAULTS = { sessions: 3, pt: 2, jogMin: 180, muscleKg: 2.5, kcal: 2150, protein: 100, scanDays: 30 };
+const GOAL_DEFAULTS = { sessions: 3, pt: 2, jogMin: 180, kcal: 2150, protein: 100, scanDays: 30 };
 function defaults() {
   const seed = window.SEED || { routine: [], sessions: [] };
   return {
@@ -411,7 +411,7 @@ const BODY = [
 // direction — how to judge it against its range: up = below is the problem, down = above is the problem,
 // mid = both sides matter, info = no judgement, plus special scales (vfl, bwi, bioAge, abd).
 const SCAN_FIELDS = [
-  ['weight', 'Weight', 'w', 'main', 'info'], ['smm', 'Skeletal muscle', 'w', 'main', 'up'], ['fat', 'Body fat', '%', 'main', 'mid'],
+  ['weight', 'Weight', 'w', 'main', 'info'], ['height', 'Height', 'cm', 'main', 'info'], ['smm', 'Skeletal muscle', 'w', 'main', 'up'], ['fat', 'Body fat', '%', 'main', 'mid'],
   ['lbm', 'Lean body mass', 'w', 'main', 'up'], ['fatMass', 'Body fat mass', 'w', 'main', 'down'],
   ['armL', 'Left arm lean', 'w', 'seg', 'up'], ['armR', 'Right arm lean', 'w', 'seg', 'up'],
   ['legL', 'Left leg lean', 'w', 'seg', 'up'], ['legR', 'Right leg lean', 'w', 'seg', 'up'], ['torso', 'Torso lean', 'w', 'seg', 'up'],
@@ -424,7 +424,7 @@ const SCAN_FIELDS = [
   ['bmr', 'BMR', 'kcal', 'health', 'info'],
 ];
 const FIELD = Object.fromEntries(SCAN_FIELDS.map((f) => [f[0], f]));
-const HAS_RANGE = (k) => !['weight', 'vfl', 'bwi', 'bioAge', 'age', 'abd', 'bmr'].includes(k);
+const HAS_RANGE = (k) => !['weight', 'height', 'vfl', 'bwi', 'bioAge', 'age', 'abd', 'bmr'].includes(k);
 const fmtRange = (r) => (r ? `${r[0]}–${r[1]}` : '');
 function parseRange(v) {
   const m = String(v || '').replace(/,/g, '.').match(/(\d+(?:\.\d+)?)\s*[-–—to]+\s*(\d+(?:\.\d+)?)/);
@@ -436,17 +436,16 @@ function rangeFor(k, upTo) {
   for (const s of sc) if (s.ranges && s.ranges[k]) return s.ranges[k];
   return null;
 }
+/** Height rarely changes — use this scan's, else the most recent earlier one. */
+function lastHeight(upTo) {
+  const sc = sortedScans().filter((x) => !upTo || x.date <= upTo.date).reverse();
+  for (const x of sc) if (toNum(x.height)) return toNum(x.height);
+  return null;
+}
 function bodyVal(s, k) {
   if (k === 'arms') return avg2(s.armL, s.armR);
   if (k === 'legs') return avg2(s.legL, s.legR);
   return toNum(s[k]);
-}
-/** Muscle goal = first scan's skeletal muscle + goals.muscleKg. */
-function bodyGoal(sc) {
-  const withM = sc.filter((s) => toNum(s.smm) != null);
-  if (!withM.length) return { target: null, gained: 0 };
-  const base = toNum(withM[0].smm), latest = toNum(withM[withM.length - 1].smm);
-  return { base, latest, target: base + (toNum(db.goals.muscleKg) || 0), gained: latest - base };
 }
 function nextScanText(latest) {
   const due = new Date(latest.date).getTime() + (toNum(db.goals.scanDays) || 30) * 864e5; // monthly by default
@@ -641,7 +640,7 @@ function scanModal(scan) {
     <div style="margin-top:10px"><label class="lbl">Date</label><input type="date" class="field" id="sc-date" value="${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}"></div>
     ${[['main', ''], ['seg', 'Body parts (segmental lean & fat)'], ['health', 'Health markers']].map(([grp, title]) => {
       const grid = `<div class="scan-grid">${SCAN_FIELDS.filter((f) => f[3] === grp).map(([k, l, un]) => `<div><label class="lbl">${l} <span class="faint">${u(un)}</span></label>
-        <input class="field" id="sc-${k}" value="${esc(s[k] ?? '')}" inputmode="decimal">
+        <input class="field" id="sc-${k}" value="${esc(s[k] ?? (isNew && k === 'height' ? lastHeight() ?? '' : ''))}" inputmode="decimal">
         ${HAS_RANGE(k) ? `<input class="field range" id="sr-${k}" value="${esc(fmtRange(rng(k)))}" placeholder="Range, e.g. 20.3–24.8" aria-label="${l} healthy range">` : ''}</div>`).join('')}</div>`;
       const extra = grp === 'health' ? `<div style="margin-top:10px"><label class="lbl">Sex <span class="faint">for the WHO body-fat table</span></label>
         <select class="field" id="sc-sex"><option value="F" ${s.sex !== 'M' ? 'selected' : ''}>Female</option><option value="M" ${s.sex === 'M' ? 'selected' : ''}>Male</option></select></div>` : '';
@@ -955,56 +954,17 @@ function weekCard() {
   </section>`;
 }
 
-/** Muscle goal as a track: start → now → goal with 0.5 kg milestones. */
-function goalTrack(g) {
-  const span = toNum(db.goals.muscleKg) || 1, pct = Math.max(0, Math.min(100, (g.gained / span) * 100));
-  const steps = []; for (let s = 0.5; s < span - 1e-6; s += 0.5) steps.push(s);
-  return `<div class="gtrack" role="img" aria-label="Skeletal muscle ${fmt1(g.latest)} of goal ${fmt1(g.target)} ${unit()}">
-      <div class="gbar"><span style="width:${pct}%"></span>${steps.map((s) => `<i class="${s <= g.gained ? 'on' : ''}" style="left:${(s / span) * 100}%"></i>`).join('')}
-        <b class="gnow" style="left:${pct}%;transform:translateX(${pct < 8 ? '0' : pct > 92 ? '-100%' : '-50%'})">${fmt1(g.latest)}</b></div>
-      <div class="gends num"><span>${fmt1(g.base)} start</span><span>${signed(g.gained)} ${unit()}</span><span>goal ${fmt1(g.target)}</span></div>
-    </div>`;
-}
-/** Scans vs. a realistic pace line (0.3 kg/month) toward the goal. */
-function paceChart(sc, g) {
-  const pts = sc.filter((s) => toNum(s.smm) != null).map((s) => ({ t: new Date(s.date).getTime(), v: toNum(s.smm) }));
-  if (!pts.length) return '';
-  const RATE = 0.3 / 30.44; // kg per day
-  const t0 = pts[0].t, tGoal = t0 + ((toNum(db.goals.muscleKg) || 0) / RATE) * 864e5, now = Date.now();
-  const x1 = Math.max(tGoal, pts[pts.length - 1].t, now), W = 340, H = 140, L = 4, R = 4, T = 16, B = 20;
-  const lo = g.base - 0.3, hi = g.target + 0.2;
-  const X = (t) => L + ((t - t0) / (x1 - t0 || 1)) * (W - L - R), Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
-  const expectNow = Math.min(g.target, g.base + RATE * ((pts[pts.length - 1].t - t0) / 864e5));
-  const diff = g.latest - expectNow;
-  const verdict = pts.length < 2 ? { cls: 'muted', t: 'Add your next scan to see your pace' }
-    : diff >= 0.05 ? { cls: 'good', t: `▲ Ahead of pace by ${fmt1(diff)} ${unit()}` }
-    : diff > -0.15 ? { cls: 'good', t: '✓ On pace' } : { cls: 'warn', t: `▼ Behind pace by ${fmt1(-diff)} ${unit()}` };
-  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${X(p.t).toFixed(1)},${Y(p.v).toFixed(1)}`).join('');
-  return `<div class="pace"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Skeletal muscle by scan against a 0.3 kilogram per month pace">
-      <line class="goal-line" x1="${L}" x2="${W - R}" y1="${Y(g.target)}" y2="${Y(g.target)}"/>
-      <text class="axis" x="${W - R}" y="${Y(g.target) - 5}" text-anchor="end">Goal ${fmt1(g.target)}</text>
-      <path class="pace-line" d="M${X(t0)},${Y(g.base)}L${X(tGoal)},${Y(g.target)}"/>
-      ${now < x1 ? `<line class="today" x1="${X(now)}" x2="${X(now)}" y1="${T}" y2="${H - B}"/>` : ''}
-      <path class="line" d="${line}"/>
-      ${pts.map((p) => `<circle class="pt" cx="${X(p.t).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="5"><title>${shortDate(p.t)}: ${fmt1(p.v)} ${unit()}</title></circle>`).join('')}
-      <text class="axis" x="${L}" y="${H - 6}">${shortDate(t0)}</text>
-      <text class="axis" x="${X(tGoal)}" y="${H - 6}" text-anchor="${X(tGoal) > W - 50 ? 'end' : 'middle'}">goal ~${new Date(tGoal).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</text>
-    </svg>
-    <div class="pace-key small"><span><i class="k-you"></i>You</span><span><i class="k-pace"></i>0.3 ${unit()}/month pace</span><span class="st ${verdict.cls}">${verdict.t}</span></div></div>`;
-}
-
-/** Small muscle-goal card from the body scans. */
-function muscleCard() {
+/** Body-scan card on the Train tab: when the next scan is due and how many measures need work. */
+function scanCard() {
   const sc = sortedScans();
   if (!sc.length) {
-    return `<button class="card day-card" data-act="go-body"><div class="grow"><div class="title">Muscle goal</div>
-      <div class="sub">Add your body scan to track skeletal muscle toward +${db.goals.muscleKg} kg</div></div><span class="chev faint">${ICON.chev}</span></button>`;
+    return `<button class="card day-card" data-act="go-body"><div class="grow"><div class="title">Body scan</div>
+      <div class="sub">Add your body scan to see where you’re healthy and what to work on</div></div><span class="chev faint">${ICON.chev}</span></button>`;
   }
-  const g = bodyGoal(sc), latest = sc[sc.length - 1];
-  if (g.target == null) return '';
+  const latest = sc[sc.length - 1], items = scoreItems(latest), work = items.filter((x) => x.st.cls === 'warn').length;
   return `<button class="card day-card" data-act="go-body"><div class="grow">
-      <div class="row"><span class="title grow">Muscle goal</span><span class="small muted">next scan ${nextScanText(latest)}</span></div>
-      ${goalTrack(g)}
+      <div class="row"><span class="title grow">Body scan</span><span class="small muted">next scan ${nextScanText(latest)}</span></div>
+      <div class="sub">${items.length ? `<span class="st good">✓ ${items.length - work} healthy</span> · <span class="st ${work ? 'warn' : 'good'}">${work ? `▼ ${work} to work on` : 'nothing to work on'}</span>` : `Last scan ${shortDate(latest.date)}`}</div>
     </div><span class="chev faint">${ICON.chev}</span></button>`;
 }
 
@@ -1170,7 +1130,7 @@ function idleView() {
     ${others ? `<div class="section-title">Other days</div><div class="stack">${others}</div>` : ''}
     ${memUrgent(memInfo()) ? '' : `<div class="section-title">Membership</div><div class="stack">${membershipCard()}</div>`}
     <div class="section-title">Body</div>
-    <div class="stack">${muscleCard()}</div>
+    <div class="stack">${scanCard()}</div>
     <div class="section-title">More</div>
     <div class="stack">
       <button class="btn big" data-act="start" data-day="">Start empty workout</button>
@@ -1394,7 +1354,7 @@ function scorecardViz(s) {
 /** Every measure with a healthy range, as a coloured zone bar:
  *  green = healthy range, amber = the side to work on, pale = the side that's fine to be on. */
 function rangeZones(s) {
-  const items = scoreItems(s).filter((x) => x.r);
+  const items = scoreItems(s).filter((x) => x.r && FIELD[x.keys[0]][3] === 'seg');
   if (!items.length) return '';
   const order = items.filter((x) => x.st.cls === 'warn').concat(items.filter((x) => x.st.cls !== 'warn'));
   const rows = order.map((x) => {
@@ -1420,7 +1380,7 @@ function rangeZones(s) {
       <div class="rb-f">${foot}</div>
     </div>`;
   });
-  return `<div class="viz-block"><div class="viz-h"><b>Healthy ranges</b></div>
+  return `<div class="viz-block"><div class="viz-h"><b>Body parts vs healthy range</b></div>
     <div class="zb-key small"><span><i class="z ok"></i>Healthy</span><span><i class="z bad"></i>Work on</span><span><i class="z fine"></i>Fine</span></div>
     ${rows.join('')}</div>`;
 }
@@ -1440,33 +1400,64 @@ function gauge(title, v, bands, min, max, fmt, note) {
 const WHO_FAT = { // Evolt explainer, WHO/NIH body fat % tables: [age to, low<, normal<, high<]
   F: [[39, 21, 33, 39], [59, 23, 35, 41], [79, 25, 38, 43]], M: [[39, 8, 21, 26], [59, 11, 23, 29], [79, 13, 25, 31]],
 };
+/** A measure with a healthy range from the scan as a gauge: the side to work on is amber, the other side is fine. */
+function rangeGauge(k, s, name) {
+  const v = toNum(s[k]); if (v == null) return '';
+  const dir = FIELD[k][4], un = unitOf(k);
+  const r = rangeFor(k, s) || (k === 'vfa' ? (s.sex === 'M' ? [50, 100] : [40, 80]) : null);
+  if (!r) return '';
+  const w = r[1] - r[0], min = Math.min(r[0] - w * 0.6, v - w * 0.1), max = Math.max(r[1] + w * 0.6, v + w * 0.1);
+  const lowBad = dir === 'up' || dir === 'mid', highBad = dir === 'down' || dir === 'mid';
+  const bands = [{ from: min, to: r[0], label: lowBad ? 'Low' : 'Low · fine', good: !lowBad },
+    { from: r[0], to: r[1], label: `Healthy ${r[0]}–${r[1]}`, good: true },
+    { from: r[1], to: max + 1e-9, label: highBad ? 'High' : 'Above · fine', good: !highBad }];
+  const gap = v < r[0] ? r[0] - v : v > r[1] ? v - r[1] : 0;
+  const note = v < r[0] && lowBad ? `+${fmtN(+gap.toFixed(2))} ${un} to reach healthy` : v > r[1] && highBad ? `${fmtN(+gap.toFixed(2))} ${un} over healthy` : '';
+  return gauge(name, v, bands, min, max, (x) => `${fmtK(k, x)} ${un}`.trim(), note);
+}
 function gaugesViz(s) {
-  const out = [];
-  const bwi = toNum(s.bwi);
-  if (bwi != null) {
-    out.push(gauge('BWI score', bwi, [{ from: 5, to: 6, label: 'Poor' }, { from: 6, to: 7, label: 'Below avg' }, { from: 7, to: 8, label: 'Average' },
-      { from: 8, to: 9, label: 'Optimal', good: true }, { from: 9, to: 10.01, label: 'Athletic', good: true }], 5, 10, (v) => `${fmtN(v)}/10`,
-    bwi < 8 ? `+${fmtN(+(8 - bwi).toFixed(1))} to reach Optimal` : ''));
+  const sec = (title, parts) => { const p = parts.filter(Boolean); return p.length ? `<div class="gs-h">${title}</div>${p.join('')}` : ''; };
+  const age = toNum(s.age);
+  // Weight → BMI (WHO), using the height from this or an earlier scan
+  const wt = toNum(s.weight), ht = toNum(s.height) || lastHeight(s);
+  let weight = '';
+  if (wt != null && ht) {
+    const m2 = (ht / 100) ** 2, bmi = wt / m2, lo = 18.5 * m2, hi = 24.9 * m2;
+    weight = gauge(`Weight · BMI ${bmi.toFixed(1)}`, bmi, [{ from: 14, to: 18.5, label: 'Under' }, { from: 18.5, to: 25, label: 'Healthy', good: true },
+      { from: 25, to: 30, label: 'Over' }, { from: 30, to: 35.01, label: 'Obese' }], 14, 35, () => `${fmtN(wt)} ${unit()}`,
+    bmi < 18.5 ? `+${fmtN(+(lo - wt).toFixed(1))} ${unit()} to reach healthy` : `healthy for ${Math.round(ht)} cm: ${fmtN(+lo.toFixed(1))}–${fmtN(+hi.toFixed(1))} ${unit()}`);
+  } else if (wt != null) {
+    weight = `<div class="gauge"><div class="rb-h"><span class="grow">Weight</span><span class="num"><b>${fmtN(wt)} ${unit()}</b></span></div>
+      <div class="small muted">Add your height to a scan to see your healthy weight range.</div></div>`;
   }
-  const fat = toNum(s.fat), age = toNum(s.age);
+  const muscle = ['smm', 'lbm', 'protein', 'mineral', 'water'].map((k) => rangeGauge(k, s, FIELD[k][1]));
+  const fat = toNum(s.fat);
+  let fatPct = '';
   if (fat != null) {
     const row = (WHO_FAT[s.sex === 'M' ? 'M' : 'F']).find((r) => (age || 30) <= r[0]) || WHO_FAT.F[2];
     const [, a, b, c] = row;
-    out.push(gauge(`Body fat % · WHO for ${s.sex === 'M' ? 'men' : 'women'} ${age ? (age < 40 ? '20–39' : age < 60 ? '40–59' : '60–79') : ''}`, fat,
+    fatPct = gauge(`Body fat % · WHO for ${s.sex === 'M' ? 'men' : 'women'} ${age ? (age < 40 ? '20–39' : age < 60 ? '40–59' : '60–79') : ''}`, fat,
       [{ from: a - 9, to: a, label: 'Low' }, { from: a, to: b, label: 'Normal', good: true }, { from: b, to: c, label: 'High' }, { from: c, to: c + 9, label: 'Very high' }],
-      a - 9, c + 9, (v) => `${fmtN(v)}%`, `WHO normal ${a}–${b - 0.1}%`));
+      a - 9, c + 9, (v) => `${fmtN(v)}%`, `WHO normal ${a}–${b - 0.1}%`);
   }
   const vfl = toNum(s.vfl);
-  if (vfl != null) {
-    out.push(gauge('Visceral fat level', vfl, [{ from: 1, to: 6, label: 'Optimal', good: true }, { from: 6, to: 10, label: 'Balanced' }, { from: 10, to: 16, label: 'Over' }],
-      1, 16, (v) => String(Math.round(v)), ''));
-  }
-  const bio = toNum(s.bioAge);
-  if (bio != null && age != null) {
-    out.push(gauge('Bio age vs your age', bio, [{ from: age - 12, to: age + 0.5, label: 'Younger', good: true }, { from: age + 0.5, to: age + 12, label: 'Older' }],
-      age - 12, age + 12, (v) => `${v} yrs`, `your age is ${age}${bio < age ? ` — ${age - bio} years younger` : ''}`));
-  }
-  return out.length ? `<div class="viz-block"><div class="viz-h"><b>Health scores</b><span class="small faint">Evolt &amp; WHO guides</span></div>${out.join('')}</div>` : '';
+  const vflG = vfl == null ? '' : gauge('Visceral fat level', vfl, [{ from: 1, to: 6, label: 'Optimal', good: true }, { from: 6, to: 10, label: 'Balanced' }, { from: 10, to: 16, label: 'Over' }],
+    1, 16, (v) => String(Math.round(v)), '');
+  const abd = toNum(s.abd), lim = s.sex === 'M' ? 102 : 88;
+  const abdG = abd == null ? '' : gauge('Waist (abdomen)', abd, [{ from: lim - 30, to: lim, label: `Under ${lim} cm`, good: true }, { from: lim, to: lim + 25, label: 'Over' }],
+    lim - 30, lim + 25, (v) => `${fmtN(v)} cm`, '');
+  const fatSec = [fatPct, rangeGauge('fatMass', s, 'Fat mass'), vflG, rangeGauge('vfa', s, 'Visceral fat area'), rangeGauge('whr', s, 'Waist-to-hip ratio'), abdG];
+  const bwi = toNum(s.bwi), bio = toNum(s.bioAge);
+  const overall = [
+    bwi == null ? '' : gauge('BWI score', bwi, [{ from: 5, to: 6, label: 'Poor' }, { from: 6, to: 7, label: 'Below avg' }, { from: 7, to: 8, label: 'Average' },
+      { from: 8, to: 9, label: 'Optimal', good: true }, { from: 9, to: 10.01, label: 'Athletic', good: true }], 5, 10, (v) => `${fmtN(v)}/10`,
+    bwi < 8 ? `+${fmtN(+(8 - bwi).toFixed(1))} to reach Optimal` : ''),
+    bio == null || age == null ? '' : gauge('Bio age vs your age', bio, [{ from: age - 12, to: age + 0.5, label: 'Younger', good: true }, { from: age + 0.5, to: age + 12, label: 'Older' }],
+      age - 12, age + 12, (v) => `${v} yrs`, `your age is ${age}${bio < age ? ` — ${age - bio} years younger` : ''}`),
+  ];
+  const body = sec('Weight', [weight]) + sec('Muscle', muscle) + sec('Fat', fatSec) + sec('Overall', overall);
+  return body ? `<div class="viz-block"><div class="viz-h"><b>Health scores</b><span class="small faint">your scan’s ranges, WHO &amp; Evolt guides</span></div>
+    <div class="zb-key small"><span><i class="z ok"></i>Healthy</span><span><i class="z bad"></i>Work on</span></div>${body}</div>` : '';
 }
 
 /** Front-facing figure: each segment coloured by where its lean mass sits vs. range. */
@@ -1506,29 +1497,24 @@ function bodyView() {
     About <b class="num" style="color:var(--text)">${Number(db.goals.kcal).toLocaleString()} kcal</b> and <b class="num" style="color:var(--text)">${db.goals.protein} g protein</b> a day, protein spread over 3–4 meals.
     Add ~200–300 kcal on long jog days. If your weight hasn’t gone up after 4 weeks, add 100–150 kcal. Change these in Settings.</div>`;
   if (!sc.length) {
-    return { title, body: `<div class="stack"><div class="card empty">No body scans yet.<br><span class="small">Add your Evolt or InBody results to track skeletal muscle toward your +${db.goals.muscleKg} kg goal.</span>
+    return { title, body: `<div class="stack"><div class="card empty">No body scans yet.<br><span class="small">Add your Evolt or InBody results to see where you’re healthy and what to work on.</span>
       <div style="margin-top:12px"><button class="btn primary" data-act="add-scan">Add body scan</button></div></div>${fuel}</div>` };
   }
   const k = BODY.some((b) => b[0] === ui.bodyMetric) ? ui.bodyMetric : 'smm';
   const meta = BODY.find((b) => b[0] === k), un = meta[3] === 'w' ? unit() : '%';
   const fmtV = (v) => (v == null ? '—' : `${fmt1(v)} ${un}`);
   const pts = sc.filter((s) => bodyVal(s, k) != null).map((s) => ({ t: new Date(s.date).getTime(), v: bodyVal(s, k), label: shortDate(s.date) }));
-  const g = bodyGoal(sc), latest = sc[sc.length - 1];
-  const target = k === 'smm' ? g.target : null;
+  const latest = sc[sc.length - 1];
   ui.chart = { pts, fmtV };
   const first = pts.length ? pts[0].v : null, last = pts.length ? pts[pts.length - 1].v : null;
   const delta = first != null && pts.length > 1 ? last - first : null;
-  const goalCard = g.target != null ? `<div class="card">
-      <div class="row"><b class="grow">Muscle goal</b><span class="small muted">next scan ${nextScanText(latest)}</span></div>
-      ${goalTrack(g)}${paceChart(sc, g)}</div>` : '';
   const overview = `<div class="card">
-      <div class="row"><b class="grow">Latest scan</b><span class="small muted">${fmtDate(latest.date)}</span></div>
+      <div class="row"><b class="grow">Latest scan</b><span class="small muted">${fmtDate(latest.date)} · next ${nextScanText(latest)}</span></div>
       ${scorecardViz(latest)}${compositionViz(latest, sc.length > 1 ? sc[0] : null)}${rangeZones(latest)}${bodyMapViz(latest)}${gaugesViz(latest)}
     </div>`;
   return {
     title,
     body: `<div class="stack">
-      ${goalCard}
       ${overview}
       <div class="section-title" style="margin:10px 2px 0">Trends</div>
       <div class="seg full" role="tablist">${BODY.map(([key, l]) => `<button class="${key === k ? 'on' : ''}" data-act="body-metric" data-k="${key}">${l}</button>`).join('')}</div>
@@ -1537,7 +1523,7 @@ function bodyView() {
         <div class="stat"><div class="v num">${delta == null ? '—' : (delta > 0 ? '+' : delta < 0 ? '−' : '±') + fmt1(Math.abs(delta))}</div><div class="k">Since ${pts.length ? shortDate(pts[0].t) : 'start'}</div></div>
         <div class="stat"><div class="v num">${sc.length}</div><div class="k">Scan${sc.length === 1 ? '' : 's'}</div></div>
       </div>
-      <div class="card chart-wrap">${pts.length ? chartSVG(pts, undefined, target) : '<div class="empty">No values for this measure yet — edit a scan to add them.</div>'}<div class="tip" hidden></div></div>
+      <div class="card chart-wrap">${pts.length ? chartSVG(pts) : '<div class="empty">No values for this measure yet — edit a scan to add them.</div>'}<div class="tip" hidden></div></div>
       <div class="card"><table class="tbl"><thead><tr><th>Date</th><th class="r">Weight</th><th class="r">Muscle</th><th class="r">Fat %</th></tr></thead><tbody>
         ${[...sc].reverse().map((s) => `<tr class="tap" data-act="edit-scan" data-id="${s.id}"><td>${shortDate(s.date)}</td><td class="r">${fmt1(s.weight)}</td><td class="r">${fmt1(s.smm)}</td><td class="r">${fmt1(s.fat)}</td></tr>`).join('')}
       </tbody></table><div class="small faint" style="margin-top:8px">Tap a row to edit. Scan at the same time of day, before eating, for comparable numbers.</div></div>
@@ -1750,7 +1736,6 @@ views.settings = () => {
     <div class="card flush">
       ${[['sessions', 'Weight-lifting sessions a week', 'PT + your own sessions (classes are extra)'], ['pt', 'PT sessions a week', ''], ['scanDays', 'Body scan every (days)', '30 = monthly'],
         ['jogMin', 'Jogging minutes a week', '180 = 3 hours. If you’re new to jogging, build up ~15 min a week'],
-        ['muscleKg', 'Muscle to gain (kg)', 'Added to your first body scan’s skeletal muscle'],
         ['kcal', 'Calories a day', 'Reminder only'], ['protein', 'Protein a day (g)', 'Reminder only']]
         .map(([k, t, sub]) => `<div class="setting"><div class="grow"><div>${t}</div>${sub ? `<div class="small muted">${sub}</div>` : ''}</div>
         <input class="field" style="width:84px;text-align:center" data-bind="goal" data-k="${k}" value="${esc(db.goals[k])}" inputmode="decimal"></div>`).join('')}

@@ -303,6 +303,7 @@ function finishFlow() {
     cancel: closeModal,
     finish: () => {
       const upd = $('#upd-routine') && $('#upd-routine').checked;
+      const before = questSnap();
       if ($('#with-pt')) a.kind = $('#with-pt').checked ? 'pt' : 'self';
       if (nSets) {
         db.sessions.push({
@@ -312,9 +313,10 @@ function finishFlow() {
         if (upd) updateRoutineFrom(a.dayId, done);
       }
       db.active = null; db.rest = null; save(); releaseWakeLock(); closeModal();
-      toast(nSets ? (a.kind === 'pt' ? 'Saved as a PT session 💪' : 'Workout saved 💪') : 'Workout ended');
-      if (nSets) ui.histMode = 'list';
-      go(nSets ? 'history' : 'train');
+      if (!nSets) toast('Workout ended');
+      // surprise first: it records this week's stars so the Train card doesn't celebrate the same thing twice
+      if (nSets) surpriseAfterLog(before, a.kind === 'pt' ? 'pt' : a.kind === 'cardio' ? 'jog' : 'lift');
+      go('train'); window.scrollTo(0, 0);
     },
   });
 }
@@ -753,13 +755,14 @@ function quickLogModal(kind) {
       const isToday = y === today.getFullYear() && m === today.getMonth() + 1 && d === today.getDate();
       const when = isToday ? new Date(Date.now() - min * 60000) : new Date(y, m - 1, d, 12);
       const name = isJog ? 'Jog' : (($('#ql-name') && $('#ql-name').value.trim()) || 'Class');
+      const before = questSnap();
       const km = isJog ? toNum($('#ql-km').value) : null;
       const s = {
         id: uid(), dayId: null, dayName: name, kind: isJog ? 'cardio' : 'class', date: localISO(when), duration: Math.round(min * 60000),
         entries: [{ name, timed: true, sets: [{ w: 'BW', r: String(Math.round(min * 60)), done: true }] }],
       };
       if (km) s.distance = km;
-      db.sessions.push(s); save(); closeModal(); toast(isJog ? `Jog logged · ${Math.round(min)} min` : `${name} logged`); renderView();
+      db.sessions.push(s); save(); closeModal(); surpriseAfterLog(before, isJog ? 'jog' : 'class'); renderView();
     },
   });
 }
@@ -880,6 +883,7 @@ function watchConfirm(w, as) {
       const secs = Math.round(m * 60);
       const km = $('#w-km') ? toNum($('#w-km').value) : w.km;
       const watch = { type: w.type, start: w.start, secs, km: km || null, kcal: w.kcal, hr: w.hr };
+      const before = questSnap();
       if (k === 'gym' && target === 'active') { db.active.watch = watch; }
       else if (k === 'gym' && target !== 'new') {
         const s = db.sessions.find((x) => x.id === target); s.watch = watch; if (!s.duration) s.duration = secs * 1000;
@@ -893,7 +897,9 @@ function watchConfirm(w, as) {
         if (km && (k === 'jog' || k === 'walk')) s.distance = km;
         db.sessions.push(s);
       }
-      save(); closeModal(); toast('Apple Watch workout saved ⌚'); renderView();
+      save(); closeModal();
+      if (k === 'gym' && target === 'active') toast('Apple Watch data attached ⌚'); else surpriseAfterLog(before, k === 'jog' || k === 'walk' ? 'jog' : k === 'class' ? 'class' : 'lift');
+      renderView();
     },
   });
 }
@@ -1007,7 +1013,7 @@ function questLine(st, w, daysLeft) {
 }
 /** Confetti burst for a newly earned star (skipped with reduced motion). */
 function celebrate(msg) {
-  toast(msg);
+  if (msg) toast(msg);
   if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const box = document.createElement('div'); box.className = 'confetti'; box.setAttribute('aria-hidden', 'true');
   const bits = ['⭐', '✨', '🎉', '💪', '★'];
@@ -1049,6 +1055,68 @@ function weekCard() {
     <div class="lbl" style="margin-top:16px">Medal shelf <span class="faint">· last 6 weeks</span></div>
     ${medalShelf(ws, g)}
   </section>`;
+}
+
+// ---------------------------------------------------------------- surprises (after logging / completing goals)
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+function questSnap() {
+  const g = db.goals, ws = weekStartOf(new Date()), w = weekStats(ws), st = weekStars(w, g), q = questStats(ws, g);
+  return { ws, w, st, m: medalOf(st), lv: q.level, streak: q.streak };
+}
+const POPS = {
+  lift: [['💪', 'Beast mode!'], ['🦾', 'Stronger than yesterday'], ['🔥', 'On fire!'], ['🚀', 'Gains incoming'], ['🐻', 'Strong like a bear'], ['🏋️', 'Lift-off!']],
+  pt: [['🤝', 'Great PT session!'], ['💪', 'Coach-approved!'], ['🔥', 'PT crushed it — and so did you']],
+  jog: [['🏃‍♀️', 'Zoom zoom!'], ['⚡', 'Speedy legs!'], ['🌈', 'Runner’s high!'], ['🐆', 'Cheetah mode'], ['👟', 'Miles in the bank']],
+  class: [['🎉', 'Class crushed!'], ['💃', 'Nice moves!'], ['🌟', 'Bonus energy!']],
+};
+const FX = ['pop', 'spin', 'bounce', 'rocket', 'wobble'];
+function fanfare(big) {
+  if (big) { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.12, 0.22, 0.25)); buzz([60, 40, 60, 40, 160]); }
+  else { tone(784, 0, 0.12, 0.2); tone(1175, 0.1, 0.18, 0.2); buzz(40); }
+}
+/** One surprise card in the middle of the screen; tap or wait to close. Returns a promise when it's gone. */
+function showSurprise({ emoji, title, sub, big }) {
+  return new Promise((done) => {
+    const fx = big ? 'big' : pick(FX);
+    const el = document.createElement('div');
+    el.className = `surprise fx-${fx}`; el.setAttribute('role', 'status');
+    const sparks = Array.from({ length: big ? 0 : 12 }, (_, i) => `<span style="--a:${i * 30 + Math.round(Math.random() * 14)}deg">${pick(['✨', '⭐', '💥', '★'])}</span>`).join('');
+    const fw = big ? Array.from({ length: 5 }, () => `<div class="fw" style="left:${10 + Math.random() * 80}%;top:${8 + Math.random() * 45}%;animation-delay:${(Math.random() * 0.9).toFixed(2)}s">${
+      Array.from({ length: 14 }, (_, i) => `<i style="--a:${i * (360 / 14)}deg;background:${pick(['#fab219', '#0ca30c', '#2a78d6', '#eb6834', '#e0457b'])}"></i>`).join('')}</div>`).join('') : '';
+    el.innerHTML = `${fw}<div class="sp-card"><div class="sp-emoji">${emoji}</div><div class="sp-burst" aria-hidden="true">${sparks}</div>
+      <div class="sp-title">${title}</div>${sub ? `<div class="sp-sub">${sub}</div>` : ''}</div>`;
+    document.body.appendChild(el);
+    fanfare(big);
+    if (big) celebrate('');
+    let gone = false;
+    const close = () => { if (gone) return; gone = true; el.classList.add('out'); setTimeout(() => { el.remove(); done(); }, 260); };
+    el.addEventListener('click', close);
+    setTimeout(close, big ? 3200 : 2100);
+  });
+}
+/** Compare the weekly quest before/after a log and pick the best surprise(s). */
+async function surpriseAfterLog(before, what) {
+  const a = questSnap();
+  db.quest = { ws: a.ws, stars: a.st.total }; save(); // so the Train card doesn't celebrate twice
+  const ev = [];
+  if (a.m === 'gold' && before.m !== 'gold') {
+    ev.push({ big: true, emoji: '🏆', title: 'GOLD WEEK!', sub: `All ${a.st.max} stars earned${a.streak > 1 ? ` · 🔥 ${a.streak} gold weeks in a row` : ' · your 🔥 streak starts now'}` });
+  } else {
+    if (a.st.lift >= a.st.liftMax && before.st.lift < before.st.liftMax) ev.push({ big: true, emoji: '🏋️', title: 'Lifting goal smashed!', sub: `${a.st.liftMax} sessions this week — every ⭐ earned` });
+    if (a.st.jog >= a.st.jogMax && before.st.jog < before.st.jogMax) ev.push({ big: true, emoji: '🏁', title: `${Math.round((a.st.jogMax * a.st.per) / 60)} hours run!`, sub: 'Jogging goal complete' });
+    if (!ev.length && a.m && a.m !== before.m) ev.push({ emoji: MEDALS[a.m][0], title: `${MEDALS[a.m][1]} unlocked!`, sub: `${a.st.total}/${a.st.max} ★ this week` });
+  }
+  if (a.lv > before.lv) ev.push({ emoji: '⬆️', title: `Level ${a.lv}!`, sub: 'Level up — keep stacking stars' });
+  if (!ev.length) {
+    const [emoji, title] = pick(POPS[what] || POPS.lift);
+    const gained = a.st.total - before.st.total;
+    const toJogStar = Math.max(0, Math.round((a.st.jog + 1) * a.st.per - a.w.jogMin));
+    const sub = gained > 0 ? `+${gained} ⭐ — ${a.st.total}/${a.st.max} this week`
+      : what === 'jog' && a.st.jog < a.st.jogMax ? `${toJogStar} more min to your next ⭐`
+      : what === 'class' ? 'Bonus workout — nice!' : `${a.st.total}/${a.st.max} ★ this week`;
+    ev.push({ emoji, title, sub });
+  }
+  for (const e of ev.slice(0, 2)) await showSurprise(e); // eslint-disable-line no-await-in-loop
 }
 
 /** Body-scan card on the Train tab: when the next scan is due and how many measures need work. */

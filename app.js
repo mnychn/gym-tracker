@@ -929,7 +929,7 @@ duration: [Duration]</pre>
       ${step(3, 'Next → choose <b>Gym Log workout</b>.')}
     </ol>
     <div class="section-title">3 · After each workout</div>
-    <p class="small muted">Open Gym Log → <b>Paste from Watch</b> (Train tab) → tap <b>Paste</b> → check it → <b>Save</b>. Runs add to your jogging target, classes count as gym sessions, and strength workouts attach calories and heart rate to that day’s Gym Log session.</p>
+    <p class="small muted">Open Gym Log → tap <b>From Watch</b> on the Weekly quest card (or the <b>+</b> button → <b>From Watch</b>) → <b>Paste</b> → check it → <b>Save</b>. Runs add to your jogging stars, classes are logged as a bonus class, and strength workouts attach calories and heart rate to that day’s Gym Log session.</p>
     <p class="small muted"><b>Optional extras:</b> add more lines such as <i>distance: …</i>, <i>energy: …</i> or <i>heart rate: …</i> if you can pick them in your iOS version. If “Workouts” isn’t in the Type list, use <i>type: Running</i> and <i>duration: [Ask for Input]</i> instead.</p>
     <div class="actions"><button class="btn primary" data-act="m:close">Done</button></div>`,
   { close: closeModal });

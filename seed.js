@@ -1,14 +1,14 @@
 // Training plan (v2): 2 PT days on machines, 1–2 self days, and jogging toward 3 h/week.
 // Goal: +2–3 kg muscle (arms and legs are furthest below range) while staying active.
 // Past workouts and body scans are NOT stored here — they live on each device (Settings → Import).
-// `kind`: 'pt' = with your PT, 'self' = on your own, 'cardio' = counts toward the jogging goal.
+// Days aren't split by PT: when you finish a workout you tick whether your PT was there. 'cardio' days count toward jogging.
 (function () {
   const x = (id, name, sets, reps, weight, rest, notes = '', timed = false) => ({ id, name, sets, reps, weight, rest, timed, notes });
   window.SEED = {
     plan: 2,
     routine: [
       {
-        id: 'pt1', kind: 'pt', name: 'PT 1: Shoulders, Chest & Back',
+        id: 'pt1', name: 'Shoulders, Chest & Back',
         exercises: [
           x('pt1a', 'Machine Chest Press', 3, '10', '', 90, '8–12 reps · PT sets the weight'),
           x('pt1b', 'Lat Pulldown', 3, '10', '', 90, '8–12 reps'),
@@ -19,7 +19,7 @@
         ],
       },
       {
-        id: 'pt2', kind: 'pt', name: 'PT 2: Lower Body',
+        id: 'pt2', name: 'Lower Body',
         exercises: [
           x('pt2a', 'Leg Press', 4, '10', '', 120, '8–12 reps · PT sets the weight'),
           x('pt2b', 'Machine Hip Thrust', 4, '10', '', 90, '8–12 reps'),
@@ -30,7 +30,7 @@
         ],
       },
       {
-        id: 's1', kind: 'self', name: 'Self: Arms & Upper',
+        id: 's1', name: 'Arms & Upper',
         exercises: [
           x('s1a', 'Incline DB Press', 3, '10', '5', 90, '8–12 reps'),
           x('s1b', 'Single-Arm DB Row', 3, '10', '8', 60, 'Reps per side'),
@@ -42,7 +42,7 @@
         ],
       },
       {
-        id: 's2', kind: 'self', name: 'Self: Glutes & Legs (or a class)',
+        id: 's2', name: 'Glutes & Legs (or a class)',
         exercises: [
           x('s2a', 'Goblet Squat', 3, '10', '18', 90, 'Was 16 kg × 15 — go heavier for 8–12'),
           x('s2b', 'DB Romanian Deadlift', 3, '10', '12', 90, '8–12 reps'),

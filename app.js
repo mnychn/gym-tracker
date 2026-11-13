@@ -97,6 +97,11 @@ function migrate(d) {
   if (!Array.isArray(d.scans)) d.scans = [];
   d.goals = { ...GOAL_DEFAULTS, ...(d.goals || {}) };
   if ((d.goalsV || 1) < 2) { d.goals.sessions = 3; d.goals.scanDays = 30; d.goalsV = 2; } // 3 lifting sessions/week, monthly scans
+  // days are no longer split into PT / own — you say whether your PT was there when you finish
+  if ((d.daysV || 1) < 2) {
+    (d.routine || []).forEach((r) => { if (r.kind === 'pt' || r.kind === 'self') delete r.kind; r.name = String(r.name || '').replace(/^\s*(PT\s*\d*|Self)\s*:\s*/i, ''); });
+    d.daysV = 2;
+  }
   return d;
 }
 function load() {
@@ -190,15 +195,17 @@ function lastEntry(name, excludeId) {
 const JOG_RE = /\b(jog|jogging|run|running|treadmill)\b/i;
 const CARDIO_RE = /\b(jog|jogging|run|running|treadmill|walk|walking|hiit|cardio)\b/i;
 const KINDS = { pt: 'With PT', self: 'On your own', class: 'Class', cardio: 'Cardio' };
+const DAY_KINDS = { gym: 'Weights', cardio: 'Cardio' };
 const isGym = (k) => k === 'pt' || k === 'self' || k === 'class';
+/** Routine days are just 'gym' or 'cardio' — whether your PT was there is recorded on the session. */
 function dayKind(d) {
-  if (d.kind) return d.kind;
-  return d.exercises.length && d.exercises.every((x) => CARDIO_RE.test(x.name)) ? 'cardio' : 'self';
+  if (d.kind === 'cardio') return 'cardio';
+  return d.exercises.length && d.exercises.every((x) => CARDIO_RE.test(x.name)) ? 'cardio' : 'gym';
 }
 function kindOf(s) {
   if (s.kind) return s.kind;
   const d = db.routine.find((x) => x.id === s.dayId);
-  if (d && d.kind) return d.kind;
+  if (d && dayKind(d) === 'cardio') return 'cardio';
   return s.entries.length && s.entries.every((e) => CARDIO_RE.test(e.name)) ? 'cardio' : 'self';
 }
 function jogSecs(s) {
@@ -258,7 +265,7 @@ function startWorkout(dayId) {
   if (db.active) { go('train'); return; }
   const day = db.routine.find((d) => d.id === dayId);
   db.active = {
-    id: uid(), dayId: day ? day.id : null, dayName: day ? day.name : 'Workout', kind: day ? dayKind(day) : 'self',
+    id: uid(), dayId: day ? day.id : null, dayName: day ? day.name : 'Workout', kind: day && dayKind(day) === 'cardio' ? 'cardio' : 'self',
     startedAt: Date.now(), pausedAt: null, pausedMs: 0, setTimer: null,
     entries: day ? day.exercises.map(entryFrom) : [],
   };
@@ -284,6 +291,9 @@ function finishFlow() {
       <div class="stat"><div class="v num">${vol ? vol.toLocaleString() : '—'}</div><div class="k">Volume ${vol ? unit() : ''}</div></div>
     </div>
     ${nSets ? '' : '<p class="muted small" style="margin-top:14px">No sets are checked off, so nothing will be saved to history.</p>'}
+    ${nSets && a.kind !== 'cardio' ? (() => { const mi = memInfo(); return `<div class="card flush" style="margin-top:14px"><label class="setting">
+      <div class="grow"><div>Did you train with your PT?</div><div class="small muted">Counts as a PT session${mi && mi.ptTotal ? ` · ${mi.ptLeft} left in your pack` : ''}</div></div>
+      <span class="switch"><input type="checkbox" id="with-pt" ${a.kind === 'pt' ? 'checked' : ''}><span></span></span></label></div>`; })() : ''}
     ${canUpdate && nSets ? `<div class="card flush" style="margin-top:14px"><label class="setting">
       <div class="grow"><div>Update routine targets</div><div class="small muted">Use today's weight, reps and sets as next time's plan</div></div>
       <span class="switch"><input type="checkbox" id="upd-routine" checked><span></span></span></label></div>` : ''}
@@ -293,6 +303,7 @@ function finishFlow() {
     cancel: closeModal,
     finish: () => {
       const upd = $('#upd-routine') && $('#upd-routine').checked;
+      if ($('#with-pt')) a.kind = $('#with-pt').checked ? 'pt' : 'self';
       if (nSets) {
         db.sessions.push({
           id: a.id, dayId: a.dayId, dayName: a.dayName, kind: a.kind || 'self', date: localISO(new Date(a.startedAt)), duration: elapsed(a), ...(a.watch ? { watch: a.watch } : {}),
@@ -301,7 +312,7 @@ function finishFlow() {
         if (upd) updateRoutineFrom(a.dayId, done);
       }
       db.active = null; db.rest = null; save(); releaseWakeLock(); closeModal();
-      toast(nSets ? 'Workout saved 💪' : 'Workout ended');
+      toast(nSets ? (a.kind === 'pt' ? 'Saved as a PT session 💪' : 'Workout saved 💪') : 'Workout ended');
       go(nSets ? 'history' : 'train');
     },
   });
@@ -936,13 +947,10 @@ const KIND_TAG = { pt: 'PT', self: 'Own', class: 'Class' };
 /** Gym sessions as slots: filled = done (labelled by type), empty = still to do. */
 function sessionSlots(w, g) {
   const n = Math.max(g.sessions, w.days.length);
-  const ptLeft = Math.max(0, g.pt - w.pt);
-  let ptShown = 0;
   return `<div class="slots" role="img" aria-label="${w.gym} of ${g.sessions} lifting sessions done">${Array.from({ length: n }, (_, i) => {
     const k = w.days[i];
     if (k) return `<span class="slot done ${k}" title="${KINDS[k]}">${ICON.check}<b>${KIND_TAG[k]}</b></span>`;
-    const tag = ptShown < ptLeft ? (ptShown++, 'PT') : '';
-    return `<span class="slot" title="To do${tag ? ' — with PT' : ''}"><b>${tag}</b></span>`;
+    return '<span class="slot" title="To do"></span>';
   }).join('')}</div>`;
 }
 /** Jogging: one segment per run on a track to the target, ticks every hour. */
@@ -1140,17 +1148,17 @@ function idleView() {
 
   const notice = db.planNotice ? `<section class="card notice">
       <b>Your new plan is loaded</b>
-      <div class="small muted" style="margin-top:4px">2 PT days, 1–2 days on your own, and jogging toward ${db.goals.jogMin / 60} h a week. Your previous routine is saved — restore it any time in Settings.</div>
+      <div class="small muted" style="margin-top:4px">3 weight sessions (tick “with PT” when you finish), and jogging toward ${db.goals.jogMin / 60} h a week. Your previous routine is saved — restore it any time in Settings.</div>
       <div class="row" style="margin-top:10px"><button class="btn sm soft" data-act="go" data-tab="routine">See routine</button><button class="btn sm ghost" data-act="dismiss-plan">Got it</button></div>
     </section>` : '';
 
   const hero = nd ? `
     <section class="card hero">
-      <div class="eyebrow">Up next${ndKind ? ` · ${KINDS[ndKind]}` : ''}</div>
+      <div class="eyebrow">Up next</div>
       <h2>${esc(nd.name)}</h2>
       <div class="small muted">${last ? `Last done ${fmtDate(last.date)} · ${relDays(last.date)}` : 'Not done yet'}</div>
       <ul>${nd.exercises.map((x) => `<li data-act="guide" data-name="${esc(x.name)}">${thumb(x.name, 'sm')}<span class="guide-link">${esc(x.name)}</span><span class="num">${summarize(Array.from({ length: +x.sets || 1 }, () => ({ w: x.weight, r: x.reps })), x.timed)}</span></li>`).join('')}</ul>
-      ${ndKind === 'pt' ? '<p class="small muted" style="margin:-6px 0 12px">Your PT may swap exercises — rename one with ⋯ or add new ones during the workout. Weights you log become next time’s targets.</p>' : ''}
+      ${ndKind === 'gym' ? '<p class="small muted" style="margin:-6px 0 12px">With your PT today? They may swap exercises — rename one with ⋯ or add new ones. You’ll tick “with PT” when you finish.</p>' : ''}
       <button class="btn primary big" data-act="start" data-day="${nd.id}">Start workout</button>
     </section>` : `<div class="card empty">No routine yet. Add training days in <b>Routine</b>.</div>`;
 
@@ -1707,13 +1715,13 @@ views.routine = () => {
   const days = db.routine.map((d, di) => `
     <details class="card day-edit" data-di="${di}" ${ui.openDays.has(d.id) ? 'open' : ''}>
       <summary><span class="chev">${ICON.chev}</span><div class="grow"><div style="font-weight:700" data-dayname="${di}">${esc(d.name)}</div>
-        <div class="small muted">${KINDS[dayKind(d)]} · ${d.exercises.length} exercise${d.exercises.length === 1 ? '' : 's'}</div></div>
+        <div class="small muted">${DAY_KINDS[dayKind(d)]} · ${d.exercises.length} exercise${d.exercises.length === 1 ? '' : 's'}</div></div>
         <button class="btn sm soft" data-act="start" data-day="${d.id}">Start</button></summary>
       <div style="margin-top:12px">
         <div class="row" style="align-items:flex-end">
           <div class="grow"><label class="lbl">Day name</label><input class="field" data-bind="rday" data-di="${di}" value="${esc(d.name)}"></div>
           <div style="width:136px"><label class="lbl">Type</label><select class="field" data-bind="rkind" data-di="${di}">
-            ${['pt', 'self', 'cardio'].map((k) => `<option value="${k}" ${dayKind(d) === k ? 'selected' : ''}>${KINDS[k]}</option>`).join('')}</select></div>
+            ${Object.keys(DAY_KINDS).map((k) => `<option value="${k}" ${dayKind(d) === k ? 'selected' : ''}>${DAY_KINDS[k]}</option>`).join('')}</select></div>
         </div>
         <div style="margin-top:12px">${d.exercises.map((x, xi) => exEditor(x, di, xi, d.exercises.length)).join('')}</div>
         <button class="btn soft" style="width:100%" data-act="rx-add" data-di="${di}">+ Add exercise</button>
@@ -1730,15 +1738,15 @@ views.routine = () => {
     body: `<div class="card week-plan">
         <b>Suggested week</b>
         <table class="tbl plan"><tbody>
-          <tr><td>Mon</td><td>PT 1 — shoulders, chest, back</td></tr>
+          <tr><td>Mon</td><td>Shoulders, chest &amp; back</td></tr>
           <tr><td>Tue</td><td>Jog 60 min, easy</td></tr>
-          <tr><td>Wed</td><td>Self — arms &amp; upper (+ optional 30 min easy jog)</td></tr>
-          <tr><td>Thu</td><td>PT 2 — lower body</td></tr>
+          <tr><td>Wed</td><td>Arms &amp; upper (+ optional 30 min easy jog)</td></tr>
+          <tr><td>Thu</td><td>Lower body</td></tr>
           <tr><td>Fri</td><td>Rest</td></tr>
-          <tr><td>Sat</td><td>Self — glutes &amp; legs, or a class</td></tr>
+          <tr><td>Sat</td><td>Glutes &amp; legs, or a class</td></tr>
           <tr><td>Sun</td><td>Jog 60–90 min, easy</td></tr>
         </tbody></table>
-        <div class="small muted" style="margin-top:8px">Any order works — the Train tab tracks your weekly totals. Keep most jogs easy, and avoid a hard run the day before PT 2. Add weight once you hit the top of the rep range on every set.</div>
+        <div class="small muted" style="margin-top:8px">Any order works — the Train tab tracks your weekly totals. Keep most jogs easy, and avoid a hard run the day before lower body. Do any of these with your PT — tick “with PT” when you finish and it counts toward your pack. Add weight once you hit the top of the rep range on every set.</div>
       </div>
       <p class="small muted" style="margin:14px 2px 12px">“Up next” on Train is the first gym day you haven’t done this week. Weight, reps and sets here are the starting values when you begin a workout.</p>
       <div class="stack">${days}</div>

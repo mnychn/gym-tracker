@@ -397,7 +397,7 @@ textarea.field { resize: vertical; font: inherit; }
 
 /* ---- goal visuals ---- */
 .slots { display: flex; gap: 8px; margin: 8px 0 2px; }
-.slot { flex: 1; height: 40px; border-radius: 10px; border: 1.5px dashed var(--line); display: flex; align-items: center; justify-content: center; gap: 4px; color: var(--text-3); font-size: 12px; }
+.slot { flex: 1; height: 26px; border-radius: 8px; border: 1.5px dashed var(--line); display: flex; align-items: center; justify-content: center; gap: 4px; color: var(--text-3); font-size: 12px; }
 .slot svg { width: 14px; height: 14px; }
 .slot.done { border: 0; background: var(--accent); color: var(--accent-ink); }
 .slot.done.class { background: var(--accent-soft); color: var(--accent); border: 1.5px solid var(--accent); }
@@ -418,7 +418,7 @@ textarea.field { resize: vertical; font: inherit; }
 .pw .bar em { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 10.5px; color: var(--text-2); padding-bottom: 1px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .pw .tgt { position: absolute; left: 0; right: 0; border-top: 1.5px dashed var(--text-3); z-index: 1; pointer-events: none; }
 .pw-x { flex: 1; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; font-size: 10px; color: var(--text-3); text-align: center; white-space: nowrap; }
-.slot svg { width: 16px; height: 16px; }
+.slot svg { width: 14px; height: 14px; flex: none; }
 .gtrack { margin-top: 10px; }
 .gbar { position: relative; height: 12px; border-radius: 99px; background: var(--surface-2); margin-top: 22px; }
 .gbar > span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; background: var(--accent); }
@@ -452,8 +452,9 @@ textarea.field { resize: vertical; font: inherit; }
 .mtl-lab span { position: absolute; left: 0; line-height: 1.3; } .mtl-lab span.e { left: auto; right: 0; text-align: right; }
 .mtl-lab span.n { transform: translateX(-50%); text-align: center; color: var(--warn); font-weight: 650; }
 .mtl-lab em { font-style: normal; font-size: 10.5px; color: var(--text-3); font-weight: 500; }
-.ptg { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; margin: 8px 0 6px; }
-.ptg span { aspect-ratio: 1; border-radius: 4px; border: 1.5px solid var(--line); }
+.ptg { display: flex; gap: 2px; margin: 6px 0 6px; }
+.ptg span { flex: 1; height: 8px; border-radius: 2px; background: var(--surface-2); border: 0; }
+.ptg span:first-child { border-radius: 4px 2px 2px 4px; } .ptg span:last-child { border-radius: 2px 4px 4px 2px; }
 .ptg span.on { background: var(--accent); border-color: var(--accent); }
 .scan-grp { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
 .scan-grp summary { cursor: pointer; font-weight: 650; font-size: 14px; color: var(--text-2); }

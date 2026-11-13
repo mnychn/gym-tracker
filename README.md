@@ -12,6 +12,7 @@ After changing any file, bump `VERSION` in `sw.js` so installed copies update.
 - **Plan (v2):** 2 PT days on machines (shoulders/chest/back, lower body), 1–2 days on your own (arms & upper, glutes & legs or a class), and a Jog day with a timer. Existing devices switch to it once; the old routine can be swapped back in Settings.
 - **Train tab:** weekly targets for gym sessions and jogging minutes, the last 6 weeks, and quick “Log a jog / Log a class”.
 - **Progress → Body:** body-scan log (weight, skeletal muscle, fat %, lean mass, arm/leg lean mass) with a muscle-gain goal line.
+- **Apple Watch:** a free Apple Shortcuts automation copies each finished watch workout; “Paste from Watch” imports it (runs → jogging target, classes → gym sessions, strength → calories/HR on that day’s session). Setup guide: Settings → Apple Watch.
 - Body scans and workouts stay on each device (and in your exported backups) — never in this repo.
 
 ## Credits

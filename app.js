@@ -293,7 +293,7 @@ function finishFlow() {
       const upd = $('#upd-routine') && $('#upd-routine').checked;
       if (nSets) {
         db.sessions.push({
-          id: a.id, dayId: a.dayId, dayName: a.dayName, kind: a.kind || 'self', date: localISO(new Date(a.startedAt)), duration: elapsed(a),
+          id: a.id, dayId: a.dayId, dayName: a.dayName, kind: a.kind || 'self', date: localISO(new Date(a.startedAt)), duration: elapsed(a), ...(a.watch ? { watch: a.watch } : {}),
           entries: done.map((e) => ({ name: e.name, timed: e.timed, sets: e.sets.map((s) => ({ w: s.w, r: s.r, done: true })) })),
         });
         if (upd) updateRoutineFrom(a.dayId, done);
@@ -495,6 +495,172 @@ function quickLogModal(kind) {
     },
   });
 }
+// ---------------------------------------------------------------- Apple Watch (via an Apple Shortcuts automation + clipboard)
+// A Shortcut runs when a watch workout ends and copies text like:
+//   GYMLOG / type: Running / start: 2026-11-13T07:05:00+08:00 / end: … / duration: 50 min / distance: 6.2 km / energy: 410 kcal / heart rate: 148
+// Web apps can't read Apple Health directly, so the user taps "Paste from Watch" and confirms.
+function parseWhen(v) {
+  if (!v) return null;
+  let t = Date.parse(v);
+  if (Number.isNaN(t)) t = Date.parse(v.replace(/\s+at\s+/i, ' ').replace(/(\d)(am|pm)\b/i, '$1 $2'));
+  return Number.isNaN(t) ? null : t;
+}
+function parseDur(v) {
+  if (!v) return null;
+  const s = String(v).toLowerCase().replace(',', '.');
+  if (/^\s*\d+:\d{2}(:\d{2})?\s*$/.test(s)) { const p = s.trim().split(':').map(Number); return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1]; }
+  let secs = 0, hit = false;
+  s.replace(/(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes|s|sec|secs|second|seconds)\b/g, (_, n, u) => {
+    hit = true; secs += +n * (u[0] === 'h' ? 3600 : u[0] === 'm' ? 60 : 1); return '';
+  });
+  if (hit) return Math.round(secs);
+  const n = toNum(s);
+  return n == null ? null : Math.round(n > 600 ? n : n * 60); // bare number: seconds if large, else minutes
+}
+function parseDist(v) {
+  if (!v) return null;
+  const s = String(v).toLowerCase().replace(',', '.'), n = toNum(s);
+  if (n == null || n <= 0) return null;
+  if (/\bmi\b|mile/.test(s)) return +(n * 1.609).toFixed(2);
+  if (/\bkm\b|kilomet/.test(s)) return +n.toFixed(2);
+  if (/\bm\b|met(er|re)/.test(s) || n > 100) return +(n / 1000).toFixed(2);
+  return +n.toFixed(2);
+}
+function parseWatch(text) {
+  if (!text || !/gymlog/i.test(text)) return null;
+  const get = (...keys) => {
+    for (const k of keys) { const m = text.match(new RegExp(`^[\\s•-]*${k}\\s*[:=]\\s*(.+)$`, 'im')); if (m && m[1].trim()) return m[1].trim(); }
+    return '';
+  };
+  const start = parseWhen(get('start', 'start date')), end = parseWhen(get('end', 'end date'));
+  let secs = parseDur(get('duration', 'time'));
+  if (!secs && start && end && end > start) secs = Math.round((end - start) / 1000);
+  const kcal = toNum(get('energy', 'active energy', 'calories', 'kcal'));
+  const hr = toNum(get('heart rate', 'avg heart rate', 'hr'));
+  return {
+    type: get('type', 'workout', 'activity') || 'Workout',
+    start: start || (end && secs ? end - secs * 1000 : Date.now() - (secs || 0) * 1000),
+    secs: secs || 0, km: parseDist(get('distance')),
+    kcal: kcal ? Math.round(kcal) : null, hr: hr ? Math.round(hr) : null,
+  };
+}
+function watchKind(type) {
+  const t = type.toLowerCase();
+  if (/run|jog/.test(t)) return 'jog';
+  if (/strength|core|weight/.test(t)) return 'gym';
+  if (/walk|hik/.test(t)) return 'walk';
+  return 'class';
+}
+const watchPill = (w) => (w ? [w.kcal ? `${w.kcal} kcal` : '', w.hr ? `${w.hr} bpm` : ''].filter(Boolean).join(' · ') : '');
+
+async function pasteFromWatch() {
+  let text = '';
+  try { if (navigator.clipboard && navigator.clipboard.readText) text = await navigator.clipboard.readText(); } catch (e) { /* denied → manual paste */ }
+  const w = parseWatch(text);
+  if (w) watchConfirm(w);
+  else watchPasteBox(text ? 'Your clipboard doesn’t hold a workout from the Shortcut.' : '');
+}
+function watchPasteBox(msg) {
+  openModal(`<div class="row"><h3 class="grow">Paste from Watch</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
+    ${msg ? `<p class="small muted">${msg}</p>` : ''}
+    <p class="small muted">Run the <b>Gym Log workout</b> Shortcut (it runs by itself when an Apple Watch workout ends), then paste here.</p>
+    <textarea class="field" id="w-text" rows="6" style="height:auto;padding:10px" placeholder="GYMLOG&#10;type: Running&#10;duration: 50 min&#10;distance: 6.2 km"></textarea>
+    <div class="actions"><button class="btn" data-act="m:help">Set up</button><button class="btn primary" data-act="m:go">Continue</button></div>`,
+  {
+    close: closeModal, help: watchSetup,
+    go: () => { const w = parseWatch($('#w-text').value); if (w) watchConfirm(w); else toast('Couldn’t read that — it should start with GYMLOG'); },
+  });
+}
+/** Review screen: choose how the watch workout counts, then save (or attach to a gym session). */
+function watchConfirm(w, as) {
+  const dup = db.sessions.find((s) => s.watch && Math.abs(s.watch.start - w.start) < 60000);
+  const k = as || watchKind(w.type);
+  const day = dayStart(new Date(w.start));
+  const gymToday = db.sessions.filter((s) => isGym(kindOf(s)) && kindOf(s) !== 'class' && dayStart(new Date(s.date)) === day && !s.watch)
+    .sort((a, b) => Math.abs(new Date(a.date) - w.start) - Math.abs(new Date(b.date) - w.start));
+  const target = k === 'gym' ? (db.active ? 'active' : gymToday[0] ? gymToday[0].id : 'new') : null;
+  const min = Math.round(w.secs / 60);
+  const opt = (v, l) => `<button class="${k === v ? 'on' : ''}" data-act="m:as" data-k="${v}">${l}</button>`;
+  openModal(`<div class="row"><h3 class="grow">Apple Watch workout</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
+    <div class="small muted">${esc(w.type)} · ${fmtDate(localISO(new Date(w.start)))} ${new Date(w.start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</div>
+    <div class="stats" style="margin-top:12px">
+      <div class="stat"><div class="v num">${min || '—'}</div><div class="k">Minutes</div></div>
+      <div class="stat"><div class="v num">${w.km ?? '—'}</div><div class="k">km</div></div>
+      <div class="stat"><div class="v num">${w.kcal ?? '—'}</div><div class="k">kcal${w.hr ? ` · ${w.hr} bpm` : ''}</div></div>
+    </div>
+    ${dup ? '<p class="small" style="color:var(--warn);margin-top:12px">This workout looks already imported.</p>' : ''}
+    <label class="lbl" style="margin-top:14px">Count it as</label>
+    <div class="seg full">${opt('jog', 'Jog')}${opt('class', 'Class')}${opt('gym', 'Gym')}${opt('walk', 'Other')}</div>
+    <p class="small muted" style="margin-top:8px">${k === 'jog' ? `Adds ${min} min to your jogging target.`
+      : k === 'class' ? 'Counts as one of your weekly gym sessions.'
+      : k === 'walk' ? 'Saved to History; doesn’t count toward your targets.'
+      : target === 'active' ? 'Adds time, calories and heart rate to the workout you’re logging now.'
+      : target !== 'new' ? `Adds time, calories and heart rate to <b>${esc(gymToday[0].dayName)}</b> from the same day.`
+      : 'No Gym Log session that day, so it’s saved as a new gym session (no sets).'}</p>
+    ${k === 'class' ? `<div style="margin-top:10px"><label class="lbl">Class name</label><input class="field" id="w-name" value="${esc(/other|mixed|cross/i.test(w.type) ? 'Class' : w.type)}"></div>` : ''}
+    <div class="row" style="margin-top:10px">
+      <div class="grow"><label class="lbl">Minutes</label><input class="field" id="w-min" inputmode="numeric" value="${min || ''}"></div>
+      ${k === 'jog' || k === 'walk' ? `<div class="grow"><label class="lbl">km</label><input class="field" id="w-km" inputmode="decimal" value="${w.km ?? ''}"></div>` : ''}
+    </div>
+    <div class="actions"><button class="btn" data-act="m:close">Cancel</button><button class="btn primary" data-act="m:save">Save</button></div>`,
+  {
+    close: closeModal,
+    as: (el) => watchConfirm(w, el.dataset.k),
+    save: () => {
+      const m = toNum($('#w-min').value) || min;
+      if (!m) { toast('Enter the minutes'); return; }
+      const secs = Math.round(m * 60);
+      const km = $('#w-km') ? toNum($('#w-km').value) : w.km;
+      const watch = { type: w.type, start: w.start, secs, km: km || null, kcal: w.kcal, hr: w.hr };
+      if (k === 'gym' && target === 'active') { db.active.watch = watch; }
+      else if (k === 'gym' && target !== 'new') {
+        const s = db.sessions.find((x) => x.id === target); s.watch = watch; if (!s.duration) s.duration = secs * 1000;
+      } else {
+        const name = k === 'jog' ? 'Jog' : k === 'class' ? (($('#w-name') && $('#w-name').value.trim()) || 'Class') : k === 'walk' ? w.type : `${w.type} (Apple Watch)`;
+        const s = {
+          id: uid(), dayId: null, dayName: name, kind: k === 'jog' || k === 'walk' ? 'cardio' : k === 'class' ? 'class' : 'self',
+          date: localISO(new Date(w.start)), duration: secs * 1000, watch,
+          entries: k === 'gym' ? [] : [{ name, timed: true, sets: [{ w: 'BW', r: String(secs), done: true }] }],
+        };
+        if (km && (k === 'jog' || k === 'walk')) s.distance = km;
+        db.sessions.push(s);
+      }
+      save(); closeModal(); toast('Apple Watch workout saved ⌚'); renderView();
+    },
+  });
+}
+function watchSetup() {
+  const step = (n, t) => `<li>${t}</li>`;
+  openModal(`<div class="row"><h3 class="grow">Connect Apple Watch</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
+    <p class="small muted">Web apps can’t read Apple Health directly, so a free Shortcut copies each finished watch workout and you paste it here with one tap. Do this once on your iPhone.</p>
+    <div class="section-title">1 · Build the Shortcut</div>
+    <ol class="guide-list">
+      ${step(1, 'Open <b>Shortcuts</b> → <b>+</b>. Name it <b>Gym Log workout</b>.')}
+      ${step(2, 'Add <b>Find Health Samples</b>. Set: Type is <b>Workouts</b> · Sort by <b>Start Date</b> · Order <b>Latest First</b> · Limit <b>1</b>.')}
+      ${step(3, 'Add <b>Text</b> and type the lines below. For each <i>[ ]</i>, tap <b>Health Samples</b> from the variable bar, tap it again, and pick that detail. For Start/End Date, also set Date Format to <b>ISO 8601</b> with time.')}
+    </ol>
+    <pre class="code">GYMLOG
+type: [Type]
+start: [Start Date]
+end: [End Date]
+duration: [Duration]</pre>
+    <ol class="guide-list" start="4">
+      ${step(4, 'Add <b>Copy to Clipboard</b>, then <b>Show Notification</b> “Workout ready — open Gym Log and tap Paste from Watch”.')}
+      ${step(5, 'Tap ▶︎ once to test and tap <b>Allow</b> for Health access.')}
+    </ol>
+    <div class="section-title">2 · Run it automatically</div>
+    <ol class="guide-list">
+      ${step(1, 'Shortcuts → <b>Automation</b> → <b>+</b> → <b>Apple Watch Workout</b>.')}
+      ${step(2, 'Workout Type: <b>Any</b> · When Workout: <b>Ends</b> → <b>Run Immediately</b>.')}
+      ${step(3, 'Next → choose <b>Gym Log workout</b>.')}
+    </ol>
+    <div class="section-title">3 · After each workout</div>
+    <p class="small muted">Open Gym Log → <b>Paste from Watch</b> (Train tab) → tap <b>Paste</b> → check it → <b>Save</b>. Runs add to your jogging target, classes count as gym sessions, and strength workouts attach calories and heart rate to that day’s Gym Log session.</p>
+    <p class="small muted"><b>Optional extras:</b> add more lines such as <i>distance: …</i>, <i>energy: …</i> or <i>heart rate: …</i> if you can pick them in your iOS version. If “Workouts” isn’t in the Type list, use <i>type: Running</i> and <i>duration: [Ask for Input]</i> instead.</p>
+    <div class="actions"><button class="btn primary" data-act="m:close">Done</button></div>`,
+  { close: closeModal });
+}
+
 const pace = (s) => {
   const secs = jogSecs(s) || (s.duration || 0) / 1000;
   if (!s.distance || !secs) return '';
@@ -538,7 +704,8 @@ function weekCard() {
     <div class="small muted" style="margin-top:10px">${hint}</div>
     <div class="row" style="margin-top:12px;flex-wrap:wrap">
       <button class="btn sm soft" data-act="quick-log" data-k="jog">+ Log a jog</button>
-      <button class="btn sm soft" data-act="quick-log" data-k="class">+ Log a class</button></div>
+      <button class="btn sm soft" data-act="quick-log" data-k="class">+ Log a class</button>
+      <button class="btn sm soft" data-act="watch-paste">⌚ Paste from Watch</button></div>
     <div class="lbl" style="margin-top:14px">Past weeks <span class="faint">· gym / jog</span></div>
     <div class="wks">${past}</div>
   </section>`;
@@ -624,6 +791,7 @@ function activeView() {
       <div class="stack">${cards || '<div class="card empty">No exercises yet — add one below.</div>'}</div>
       <div class="stack" style="margin-top:16px">
         <button class="btn big soft" data-act="add-ex">+ Add exercise</button>
+        <button class="btn big ghost" data-act="watch-paste">${a.watch ? `⌚ Watch added · ${watchPill(a.watch) || fmtDur(a.watch.secs * 1000)}` : '⌚ Paste from Watch'}</button>
         <button class="btn big primary" data-act="finish">Finish workout</button>
         <button class="btn big ghost danger" data-act="discard">Discard workout</button>
       </div>`,
@@ -671,6 +839,7 @@ views.history = () => {
     html += `<button class="card sess" data-act="edit-session" data-id="${s.id}" style="margin-bottom:10px">
       <div class="row"><span class="d grow">${fmtDate(s.date)}</span>
         ${s.distance ? `<span class="pill num">${s.distance} km${pace(s) ? ` · ${pace(s)}` : ''}</span>` : ''}
+        ${watchPill(s.watch) ? `<span class="pill num" title="From Apple Watch">⌚ ${watchPill(s.watch)}</span>` : ''}
         ${s.duration ? `<span class="pill num">${fmtDur(s.duration)}</span>` : ''}</div>
       <div class="small muted">${esc(s.dayName || 'Workout')} <span class="faint">· ${KINDS[kindOf(s)]}</span></div>
       <div class="ex-list">${s.entries.map((e) => `${esc(e.name)} <span class="faint">— ${summarize(e.sets, e.timed)}</span>`).join('<br>')}</div>
@@ -968,6 +1137,11 @@ views.settings = () => {
         <label class="btn sm" style="position:relative;overflow:hidden">Import<input type="file" accept="application/json,.json" data-bind="import" style="position:absolute;inset:0;opacity:0"></label></div>
       <div class="setting"><div class="grow"><div>Reset everything</div><div class="small muted">Erase history and restore the original routine</div></div><button class="btn sm danger" data-act="reset">Reset</button></div>
     </div>
+    <div class="section-title">Apple Watch</div>
+    <div class="card flush">
+      <div class="setting"><div class="grow"><div>Connect Apple Watch workouts</div><div class="small muted">Free Shortcut that copies each finished workout for Gym Log</div></div><button class="btn sm" data-act="watch-setup">Set up</button></div>
+      <div class="setting"><div class="grow"><div>Paste from Watch</div><div class="small muted">Import the workout the Shortcut copied</div></div><button class="btn sm" data-act="watch-paste">Paste</button></div>
+    </div>
     <div class="section-title">Credits</div>
     <div class="card small muted" style="line-height:1.6">${REPDB_CREDIT}. Illustrations from the RepDB free tier.</div>
     <div class="section-title">Install as an app</div>
@@ -1197,6 +1371,8 @@ document.addEventListener('click', async (ev) => {
     case 'edit-scan': scanModal(db.scans.find((s) => s.id === t.dataset.id)); break;
     case 'go-body': ui.progressMode = 'body'; go('progress'); window.scrollTo(0, 0); break;
     case 'quick-log': quickLogModal(t.dataset.k); break;
+    case 'watch-paste': pasteFromWatch(); break;
+    case 'watch-setup': watchSetup(); break;
     case 'dismiss-plan': db.planNotice = false; save(); renderView(); break;
     case 'swap-routine':
       if (await confirmBox({ title: 'Swap routines?', body: 'Your current routine is kept, so you can swap back here any time. History isn’t affected.', ok: 'Swap' })) {

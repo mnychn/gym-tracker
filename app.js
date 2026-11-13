@@ -403,12 +403,26 @@ const sortedScans = () => [...db.scans].sort((a, b) => (a.date < b.date ? -1 : 1
 const BODY = [
   ['smm', 'Muscle', 'Skeletal muscle', 'w'], ['weight', 'Weight', 'Weight', 'w'], ['fat', 'Fat %', 'Body fat', '%'],
   ['lbm', 'Lean', 'Lean body mass', 'w'], ['arms', 'Arms', 'Arm lean mass (avg L/R)', 'w'], ['legs', 'Legs', 'Leg lean mass (avg L/R)', 'w'],
+  ['bwi', 'BWI', 'BWI score', '/10'],
 ];
+// [key, label, unit ('w' = weight unit), form group, direction]
+// direction — how to judge it against its range: up = below is the problem, down = above is the problem,
+// mid = both sides matter, info = no judgement, plus special scales (vfl, bwi, bioAge, abd).
 const SCAN_FIELDS = [
-  ['weight', 'Weight', 'w'], ['smm', 'Skeletal muscle', 'w'], ['fat', 'Body fat', '%'], ['lbm', 'Lean body mass', 'w'],
-  ['armL', 'Left arm lean', 'w'], ['armR', 'Right arm lean', 'w'], ['legL', 'Left leg lean', 'w'], ['legR', 'Right leg lean', 'w'],
-  ['torso', 'Torso lean', 'w'],
+  ['weight', 'Weight', 'w', 'main', 'info'], ['smm', 'Skeletal muscle', 'w', 'main', 'up'], ['fat', 'Body fat', '%', 'main', 'mid'],
+  ['lbm', 'Lean body mass', 'w', 'main', 'up'], ['fatMass', 'Body fat mass', 'w', 'main', 'down'],
+  ['armL', 'Left arm lean', 'w', 'seg', 'up'], ['armR', 'Right arm lean', 'w', 'seg', 'up'],
+  ['legL', 'Left leg lean', 'w', 'seg', 'up'], ['legR', 'Right leg lean', 'w', 'seg', 'up'], ['torso', 'Torso lean', 'w', 'seg', 'up'],
+  ['armLF', 'Left arm fat', 'w', 'seg', 'down'], ['armRF', 'Right arm fat', 'w', 'seg', 'down'],
+  ['legLF', 'Left leg fat', 'w', 'seg', 'down'], ['legRF', 'Right leg fat', 'w', 'seg', 'down'], ['torsoF', 'Torso fat', 'w', 'seg', 'down'],
+  ['protein', 'Protein', 'w', 'health', 'up'], ['mineral', 'Mineral', 'w', 'health', 'up'], ['water', 'Total body water', 'w', 'health', 'up'],
+  ['vfl', 'Visceral fat level', '', 'health', 'vfl'], ['vfa', 'Visceral fat area', 'cm²', 'health', 'down'],
+  ['bwi', 'BWI score', '/10', 'health', 'bwi'], ['bioAge', 'Bio age', 'yrs', 'health', 'bioAge'], ['age', 'Your age', 'yrs', 'health', 'info'],
+  ['whr', 'Waist-to-hip ratio', '', 'health', 'down'], ['abd', 'Abdominal circumference', 'cm', 'health', 'abd'],
+  ['bmr', 'BMR', 'kcal', 'health', 'info'],
 ];
+const FIELD = Object.fromEntries(SCAN_FIELDS.map((f) => [f[0], f]));
+const HAS_RANGE = (k) => !['weight', 'vfl', 'bwi', 'bioAge', 'age', 'abd', 'bmr'].includes(k);
 const fmtRange = (r) => (r ? `${r[0]}–${r[1]}` : '');
 function parseRange(v) {
   const m = String(v || '').replace(/,/g, '.').match(/(\d+(?:\.\d+)?)\s*[-–—to]+\s*(\d+(?:\.\d+)?)/);
@@ -478,18 +492,23 @@ function prepImage(img) {
   return { plain, inv };
 }
 // field → label pattern on the sheet (Evolt 360; similar wording on InBody), plausible range
+// field → [label on the sheet, plausible min, max, whole numbers allowed]
 const SCAN_LABELS = {
   weight: [/\bWEIGHT\b/i, 25, 250], lbm: [/LEAN\s*BODY\s*MASS/i, 15, 120], smm: [/SKELETAL\s*MUSCLE/i, 8, 80],
-  fat: [/BODY\s*FAT\s*(PERCENT|%)|PERCENT\s*BODY\s*FAT|PBF/i, 3, 70],
+  fat: [/BODY\s*FAT\s*(PERCENT|%)|PERCENT\s*BODY\s*FAT|PBF/i, 3, 70], fatMass: [/BODY\s*FAT\s*MASS/i, 1, 120],
   armL: [/LEFT\s*ARM/i, 0.3, 8], armR: [/RIGHT\s*ARM/i, 0.3, 8], legL: [/LEFT\s*LEG/i, 1.5, 25], legR: [/RIGHT\s*LEG/i, 1.5, 25],
   torso: [/\bTORSO\b/i, 5, 60],
+  protein: [/\bPROTEIN\b/i, 2, 30], mineral: [/\bMINERAL\b/i, 0.8, 10], water: [/TOTAL\s*BODY\s*WATER/i, 10, 90],
+  vfl: [/VISCERAL\s*FAT\s*LEVEL/i, 1, 30, true], vfa: [/VISCERAL\s*FAT\s*AREA/i, 5, 400, true],
+  bmr: [/\bBMR\b/i, 600, 4000, true], bioAge: [/BIO\s*AGE/i, 10, 100, true], bwi: [/\bBWI/i, 0, 10],
+  whr: [/WAIST\s*TO\s*HIP/i, 0.4, 1.5], abd: [/ABDOMINAL/i, 40, 200], age: [/\bAGE\b/i, 12, 100, true],
 };
 /** words: [{t, x, y}] with x/y as fractions of image width. Returns {fields, date}. */
 function parseScanWords(words, lines, valueWords = []) {
   const out = {}, ranges = {};
   const leftPanel = (k) => /^(armL|legL|torso)$/.test(k); // these labels sit right of their value on the sheet
   // reference range printed after a value, e.g. "[36.6 - 44.8]" — OCR often drops dots, so rescale and sanity-check
-  const rangeAfter = (pick) => {
+  const rangeAfter = (pick, maxRatio = 1.7) => {
     const fitR = (x) => { for (const f of [1, 0.1, 0.01]) { if (x * f >= pick.v * 0.4 && x * f <= pick.v * 2.5) return +(x * f).toFixed(2); } return null; };
     for (const src of [valueWords, words]) {
       const txt = src.filter((w) => Math.abs(w.y - pick.y) < 0.012 && w.x > pick.x + 0.01 && w.x < pick.x + 0.24)
@@ -497,25 +516,27 @@ function parseScanWords(words, lines, valueWords = []) {
       for (const m of txt.matchAll(/(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)/g)) {
         const lo = fitR(+m[1]), hi = fitR(+m[2]);
         const dp = pick.dp || 1, rd = (x) => +x.toFixed(dp);
-        if (lo && hi && hi / lo > 1.05 && hi / lo < 1.7) return [rd(lo), rd(hi)];
+        if (lo && hi && hi / lo > 1.05 && hi / lo < maxRatio) return [rd(lo), rd(hi)];
       }
     }
     return null;
   };
   const toNums = (ws) => ws.map((w) => {
-    const m = w.t.replace(',', '.').match(/^(\d{1,3}(?:\.\d{1,2})?)%?\/?$/); // ranges like [36.6 or (1.98 don't match
-    return m && (m[1].includes('.') || +m[1] >= 100) ? { v: +m[1], dp: (m[1].split('.')[1] || '').length, x: w.x, y: w.y } : null; // scan values have decimals (or lost their dot)
+    const m = w.t.replace(',', '.').match(/^(\d{1,4}(?:\.\d{1,2})?)%?\/?$/); // ranges like [36.6 or (1.98 don't match
+    return m ? { v: +m[1], dp: (m[1].split('.')[1] || '').length, int: !m[1].includes('.') && +m[1] < 100, x: w.x, y: w.y } : null;
   }).filter(Boolean);
   const primary = toNums(valueWords);
   const nums = primary.concat(toNums(words).filter((n) => !primary.some((q) => Math.abs(q.x - n.x) < 0.02 && Math.abs(q.y - n.y) < 0.01)));
   const fit = (v, lo, hi) => { for (const f of [1, 0.1, 0.01]) { if (v * f >= lo && v * f <= hi) return +(v * f).toFixed(2); } return null; };
-  Object.entries(SCAN_LABELS).forEach(([k, [re, lo, hi]]) => {
+  Object.entries(SCAN_LABELS).forEach(([k, [re, lo, hi, intOk]]) => {
+    const pool = intOk ? nums : nums.filter((n) => !n.int); // most values have decimals (or lost their dot → ≥100)
+    const reach = k === 'bioAge' ? 0.08 : 0.06;
     for (const ln of lines) {
       const m = ln.text.match(re); if (!m) continue;
       // which word does the match start in?
       let pos = 0, lw = ln.words[0];
       for (const w of ln.words) { if (pos + w.t.length >= m.index) { lw = w; break; } pos += w.t.length + 1; }
-      const below = nums.filter((n) => n.y > lw.y + 0.004 && n.y < lw.y + 0.06);
+      const below = pool.filter((n) => n.y > lw.y + 0.004 && n.y < lw.y + reach);
       let cand;
       if (leftPanel(k)) cand = below.filter((n) => n.x < lw.x).sort((a, b) => a.y - b.y || a.x - b.x);
       else cand = below.filter((n) => n.x > lw.x - 0.09 && n.x < lw.x + 0.12).sort((a, b) => a.y - b.y || a.x - b.x);
@@ -523,7 +544,18 @@ function parseScanWords(words, lines, valueWords = []) {
         const rowY = cand[0].y, row = cand.filter((n) => Math.abs(n.y - rowY) < 0.012);
         const pick = leftPanel(k) ? row.sort((a, b) => a.x - b.x)[0] : row.sort((a, b) => Math.abs(a.x - lw.x) - Math.abs(b.x - lw.x))[0];
         const v = fit(pick.v, lo, hi);
-        if (v != null) { out[k] = v; const r = rangeAfter({ ...pick, v }); if (r) ranges[k] = r; break; }
+        if (v != null) {
+          out[k] = v; const r = rangeAfter({ ...pick, v }, k === 'vfa' || k === 'fat' ? 2.2 : 1.7); if (r) ranges[k] = r;
+          // segmental panels: the fat-mass box sits in the same row (left panels: 2nd from left; right panels: right of the range)
+          if (/^(armL|armR|legL|legR|torso)$/.test(k)) {
+            const rowN = nums.filter((n) => !n.int && Math.abs(n.y - pick.y) < 0.012 && n !== pick);
+            const fp = leftPanel(k) ? rowN.filter((n) => n.x > pick.x && n.x < lw.x).sort((p, q) => p.x - q.x)[0]
+              : rowN.filter((n) => n.x > pick.x + 0.12 && n.x < pick.x + 0.4).sort((p, q) => p.x - q.x)[0];
+            const fv = fp && fit(fp.v, 0.05, 30);
+            if (fv != null) { out[`${k}F`] = fv; const fr = rangeAfter({ ...fp, v: fv }); if (fr) ranges[`${k}F`] = fr; }
+          }
+          break;
+        }
       }
     }
   });
@@ -538,7 +570,7 @@ function parseScanWords(words, lines, valueWords = []) {
     if (mon >= 1 && mon <= 12 && day >= 1 && day <= 31) date = `${dm[3]}-${pad(mon)}-${pad(day)}`;
   }
   // left and right share one range on the sheet: keep whichever reading sits closest to both values
-  [['armL', 'armR'], ['legL', 'legR']].forEach(([l, r]) => {
+  [['armL', 'armR'], ['legL', 'legR'], ['armLF', 'armRF'], ['legLF', 'legRF']].forEach(([l, r]) => {
     const cands = [ranges[l], ranges[r]].filter(Boolean);
     if (!cands.length) return;
     const vals = [out[l], out[r]].filter((v) => v != null);
@@ -546,7 +578,9 @@ function parseScanWords(words, lines, valueWords = []) {
     const best = cands.sort((p, q) => dist(p) - dist(q))[0];
     ranges[l] = best; ranges[r] = best;
   });
-  return { fields: out, ranges, date };
+  const all = lines.map((l) => l.text).join(' ');
+  const sex = /\bFEMALE\b/i.test(all) ? 'F' : /\bMALE\b/i.test(all) ? 'M' : null;
+  return { fields: out, ranges, date, sex };
 }
 async function readScanFile(file, onProgress) {
   const img = await fileImage(file);
@@ -577,8 +611,9 @@ async function onScanUpload(file) {
     if (!$('#sc-date')) return; // modal closed meanwhile
     const got = Object.keys(res.fields);
     document.querySelectorAll('.scan-grid .field.filled, #sc-date.filled').forEach((e) => e.classList.remove('filled'));
-    got.forEach((k) => { const e = $(`#sc-${k}`); if (e) { e.value = res.fields[k]; e.classList.add('filled'); } });
+    got.forEach((k) => { const e = $(`#sc-${k}`); if (e) { e.value = res.fields[k]; e.classList.add('filled'); const g = e.closest('details'); if (g) g.open = true; } });
     if (res.date) { $('#sc-date').value = res.date; $('#sc-date').classList.add('filled'); }
+    if (res.sex && $('#sc-sex')) { $('#sc-sex').value = res.sex; $('#sc-sex').classList.add('filled'); }
     Object.entries(res.ranges || {}).forEach(([k, r]) => { const e = $(`#sr-${k}`); if (e && !e.value) { e.value = fmtRange(r); e.classList.add('filled'); } });
     const missing = SCAN_FIELDS.filter(([k]) => !got.includes(k)).map(([, l]) => l);
     say(got.length
@@ -602,9 +637,14 @@ function scanModal(scan) {
       <input type="file" accept="image/*" id="sc-file" style="position:absolute;inset:0;opacity:0"></label>
     <p class="small muted" id="sc-status" style="margin-top:8px">Reads the numbers on your phone — the image isn’t uploaded anywhere. Or type them in below.</p>
     <div style="margin-top:10px"><label class="lbl">Date</label><input type="date" class="field" id="sc-date" value="${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}"></div>
-    <div class="scan-grid">${SCAN_FIELDS.map(([k, l, un]) => `<div><label class="lbl">${l} <span class="faint">${u(un)}</span></label>
-      <input class="field" id="sc-${k}" value="${esc(s[k] ?? '')}" inputmode="decimal">
-      ${k === 'weight' ? '' : `<input class="field range" id="sr-${k}" value="${esc(fmtRange(rng(k)))}" placeholder="Healthy range, e.g. 20.3–24.8" aria-label="${l} healthy range">`}</div>`).join('')}</div>
+    ${[['main', ''], ['seg', 'Body parts (segmental lean & fat)'], ['health', 'Health markers']].map(([grp, title]) => {
+      const grid = `<div class="scan-grid">${SCAN_FIELDS.filter((f) => f[3] === grp).map(([k, l, un]) => `<div><label class="lbl">${l} <span class="faint">${u(un)}</span></label>
+        <input class="field" id="sc-${k}" value="${esc(s[k] ?? '')}" inputmode="decimal">
+        ${HAS_RANGE(k) ? `<input class="field range" id="sr-${k}" value="${esc(fmtRange(rng(k)))}" placeholder="Range, e.g. 20.3–24.8" aria-label="${l} healthy range">` : ''}</div>`).join('')}</div>`;
+      const extra = grp === 'health' ? `<div style="margin-top:10px"><label class="lbl">Sex <span class="faint">for the WHO body-fat table</span></label>
+        <select class="field" id="sc-sex"><option value="F" ${s.sex !== 'M' ? 'selected' : ''}>Female</option><option value="M" ${s.sex === 'M' ? 'selected' : ''}>Male</option></select></div>` : '';
+      return title ? `<details class="scan-grp" ${SCAN_FIELDS.some((f) => f[3] === grp && s[f[0]] != null) ? 'open' : ''}><summary>${title}</summary>${grid}${extra}</details>` : grid;
+    }).join('')}
     <p class="small faint" style="margin-top:6px">Healthy ranges are the numbers in [brackets] on your sheet — they’re carried over from your last scan.</p>
     <div style="margin-top:10px"><label class="lbl">Notes</label><input class="field" id="sc-notes" value="${esc(s.notes || '')}" placeholder="e.g. Evolt 360, morning, before eating"></div>
     <div class="actions">${isNew ? '<button class="btn" data-act="m:close">Cancel</button>' : '<button class="btn danger" data-act="m:del">Delete</button>'}
@@ -621,6 +661,7 @@ function scanModal(scan) {
       s.ranges = {};
       SCAN_FIELDS.forEach(([k]) => { const e = $(`#sr-${k}`), r = e && parseRange(e.value); if (r) s.ranges[k] = r; });
       s.notes = $('#sc-notes').value.trim();
+      if ($('#sc-sex')) s.sex = $('#sc-sex').value;
       if (s.weight == null && s.smm == null) { toast('Enter at least weight or skeletal muscle'); return; }
       const i = db.scans.findIndex((x) => x.id === s.id);
       if (i >= 0) db.scans[i] = s; else db.scans.push(s);
@@ -918,7 +959,7 @@ function goalTrack(g) {
   const steps = []; for (let s = 0.5; s < span - 1e-6; s += 0.5) steps.push(s);
   return `<div class="gtrack" role="img" aria-label="Skeletal muscle ${fmt1(g.latest)} of goal ${fmt1(g.target)} ${unit()}">
       <div class="gbar"><span style="width:${pct}%"></span>${steps.map((s) => `<i class="${s <= g.gained ? 'on' : ''}" style="left:${(s / span) * 100}%"></i>`).join('')}
-        <b class="gnow" style="left:${pct}%">${fmt1(g.latest)}</b></div>
+        <b class="gnow" style="left:${pct}%;transform:translateX(${pct < 8 ? '0' : pct > 92 ? '-100%' : '-50%'})">${fmt1(g.latest)}</b></div>
       <div class="gends num"><span>${fmt1(g.base)} start</span><span>${signed(g.gained)} ${unit()}</span><span>goal ${fmt1(g.target)}</span></div>
     </div>`;
 }
@@ -1241,12 +1282,6 @@ views.progress = () => {
 
 // ---------------------------------------------------------------- body scan visuals
 // status: lean measures are fine at/above range; body fat is only fine inside it. Icon + label always ship with the colour.
-function rangeStatus(k, v, r) {
-  if (v == null || !r) return null;
-  if (v < r[0]) return { cls: 'warn', icon: '▼', text: 'Below range' };
-  if (v > r[1]) return k === 'fat' ? { cls: 'warn', icon: '▲', text: 'Above range' } : { cls: 'good', icon: '▲', text: 'Above range' };
-  return { cls: 'good', icon: '✓', text: 'In range' };
-}
 const signed = (d) => `${d > 0 ? '+' : d < 0 ? '−' : '±'}${fmt1(Math.abs(d))}`;
 // keep the sheet's precision: 20.0, 1.53
 const fmtN = (v) => (v == null ? '—' : Math.abs(v * 10 - Math.round(v * 10)) < 1e-6 ? (+v).toFixed(1) : String(+(+v).toFixed(2)));
@@ -1282,46 +1317,150 @@ function compositionViz(s, first) {
   </div>`;
 }
 
-/** Each measure against its healthy range: grey band = range, dot = you. */
-function rangeViz(s) {
-  const rows = [
-    ['smm', 'Skeletal muscle', [['', s.smm]]], ['lbm', 'Lean body mass', [['', s.lbm]]], ['fat', 'Body fat', [['', s.fat]], '%'],
-    ['armL', 'Arms (lean)', [['L', s.armL, 'armL'], ['R', s.armR, 'armR']]],
-    ['legL', 'Legs (lean)', [['L', s.legL, 'legL'], ['R', s.legR, 'legR']]], ['torso', 'Torso (lean)', [['', s.torso]]],
-  ].map(([k, label, vals, un]) => {
-    const pts = vals.filter((x) => toNum(x[1]) != null).map(([tag, v, kk]) => ({ tag, v: toNum(v), r: rangeFor(kk || k, s), k: kk || k }));
-    const r = pts.length && pts[0].r;
-    if (!pts.length || !r) return '';
+// Judge one measure, using the sheet's own range plus the Evolt explainer's guides
+// (visceral fat level 1–5 optimal, BWI 8+ optimal, bio age ≤ real age, abdomen < 88 cm women / 102 cm men).
+function statusOf(k, s) {
+  const v = toNum(s[k]); if (v == null) return null;
+  const dir = FIELD[k] && FIELD[k][4];
+  // visceral fat area: Evolt's guide is 40–80 cm² for women, 50–100 cm² for men
+  const r = HAS_RANGE(k) ? rangeFor(k, s) || (k === 'vfa' ? (s.sex === 'M' ? [50, 100] : [40, 80]) : null) : null;
+  const ok = (t = 'Optimal') => ({ cls: 'good', icon: '✓', text: t });
+  const work = (icon, t) => ({ cls: 'warn', icon, text: t });
+  switch (dir) {
+    case 'up': return r ? (v < r[0] ? work('▼', v >= r[0] * 0.97 ? 'Just below range' : 'Below range') : ok(v > r[1] ? 'Above range' : 'Optimal')) : null;
+    case 'down': return r ? (v > r[1] ? work('▲', v <= r[1] * 1.03 ? 'Just above range' : 'Above range') : ok(v < r[0] ? 'Low — fine' : 'Optimal')) : null;
+    case 'mid': return r ? (v < r[0] ? work('▼', 'Below range') : v > r[1] ? work('▲', 'Above range') : ok()) : null;
+    case 'vfl': return v <= 5 ? ok() : v <= 9 ? work('▲', 'Balanced (6–9)') : work('▲', 'Over (10+)');
+    case 'bwi': return v >= 9 ? ok('Athletic') : v >= 8 ? ok('Optimal') : v >= 7 ? work('▼', 'Average') : v >= 6 ? work('▼', 'Below average') : work('▼', 'Poor');
+    case 'bioAge': { const age = toNum(s.age); if (age == null) return null; return v <= age ? ok(v < age ? `${age - v} yrs younger` : 'Same as age') : work('▲', `${v - age} yrs older`); }
+    case 'abd': { const lim = s.sex === 'M' ? 102 : 88; return v < lim ? ok(`Under ${lim} cm`) : work('▲', `Over ${lim} cm`); }
+    default: return null;
+  }
+}
+// what each measure means (paraphrased from the Evolt explainer)
+const SCORE_ITEMS = [
+  ['smm', 'Skeletal muscle', null, 'Muscle attached to your skeleton. More of it raises the calories you burn at rest — your main goal.'],
+  ['lbm', 'Lean mass', null, 'Everything except fat: muscle, protein, minerals and water.'],
+  ['arms', 'Arm muscle', ['armL', 'armR'], 'Lean mass in each arm. Compare left and right to spot imbalances.'],
+  ['legs', 'Leg muscle', ['legL', 'legR'], 'Lean mass in each leg.'],
+  ['torso', 'Torso muscle', null, 'Lean mass in your trunk.'],
+  ['protein', 'Protein', null, 'Protein stored in your body, used to build and repair muscle.'],
+  ['mineral', 'Minerals', null, 'Mostly bone mineral. Strength training helps keep it up as you age.'],
+  ['water', 'Body water', null, 'Water inside and outside your cells — healthy is about 45–65% of body weight. Drink steadily through the day.'],
+  ['fat', 'Body fat %', null, 'Fat as a share of your weight. See the WHO table below.'],
+  ['fatMass', 'Fat mass', null, 'Total fat in kg. Slightly under range is fine while you build muscle.'],
+  ['armsF', 'Arm fat', ['armLF', 'armRF'], 'Fat stored in each arm — useful for seeing where fat changes.'],
+  ['legsF', 'Leg fat', ['legLF', 'legRF'], 'Fat stored in each leg.'],
+  ['torsoF', 'Torso fat', null, 'Fat stored around your trunk.'],
+  ['vfl', 'Visceral fat level', null, 'Fat around your organs. 1–5 is optimal, 6–9 balanced, 10+ over range.'],
+  ['vfa', 'Visceral fat area', null, 'Area of fat around your organs. Lower is better.'],
+  ['whr', 'Waist-to-hip', null, 'How your fat is distributed. Lower is better.'],
+  ['abd', 'Waist (abdomen)', null, 'Measured around your navel.'],
+  ['bwi', 'BWI score', null, 'Bio-Wellness Index from your lean vs fat mass: 8.0+ optimal, 9+ athletic.'],
+  ['bioAge', 'Bio age', null, 'The age your body composition suggests. Younger than your real age means you’re on track.'],
+];
+const INT_FIELDS = new Set(['vfl', 'vfa', 'bioAge', 'age', 'bmr']);
+const fmtK = (k, v) => (v == null ? '—' : INT_FIELDS.has(k) ? String(Math.round(v)) : fmtN(v));
+const unitOf = (k) => { const u = FIELD[k] ? FIELD[k][2] : ''; return u === 'w' ? unit() : u; };
+function scoreItems(s) {
+  return SCORE_ITEMS.map(([id, name, pair, tip]) => {
+    const keys = pair || [id];
+    const st = keys.map((k) => statusOf(k, s)).filter(Boolean);
+    const vals = keys.map((k) => toNum(s[k]));
+    if (!st.length) return null;
+    const worst = st.find((x) => x.cls === 'warn') || st[0];
+    const valTxt = pair ? vals.map((v, i) => (v == null ? '' : `${i ? 'R' : 'L'} ${fmtN(v)}`)).filter(Boolean).join(' · ') : fmtK(keys[0], vals[0]);
+    const r = HAS_RANGE(keys[0]) ? rangeFor(keys[0], s) : null;
+    return { id, name, keys, tip, st: worst, valTxt, un: unitOf(keys[0]), r };
+  }).filter(Boolean);
+}
+/** Scorecard: every measure as a tile, grouped Needs work / Optimal, with a summary strip. */
+function scorecardViz(s) {
+  const items = scoreItems(s); if (!items.length) return '';
+  const work = items.filter((x) => x.st.cls === 'warn'), good = items.filter((x) => x.st.cls === 'good');
+  const tile = (x) => `<details class="tile ${x.st.cls} ${x.keys.length > 1 ? 'pair' : ''}"><summary><span class="t-ic">${x.st.icon}</span><span class="t-n">${x.name}</span>
+      <span class="t-v num">${x.valTxt}${x.un && x.un !== '/10' ? ` <small>${x.un}</small>` : x.un ? '<small>/10</small>' : ''}</span><span class="t-s">${x.st.text}</span></summary>
+      <p>${x.tip}${x.r ? ` <b>Your range: ${x.r[0]}–${x.r[1]}${x.un && x.un !== '/10' ? ` ${x.un}` : ''}.</b>` : ''}</p></details>`;
+  return `<div class="viz-block">
+    <div class="viz-h"><b>Where you stand</b><span class="small faint">tap a tile for details</span></div>
+    <div class="sc-strip" role="img" aria-label="${good.length} optimal, ${work.length} need work">${work.map((x) => `<span class="warn" title="${x.name}: ${x.st.text}"></span>`).join('')}${good.map((x) => `<span class="good" title="${x.name}: ${x.st.text}"></span>`).join('')}</div>
+    <div class="sc-count"><span class="st warn">▼ ${work.length} to work on</span><span class="st good">✓ ${good.length} optimal</span></div>
+    ${work.length ? `<div class="sc-h warn">Needs work</div><div class="tiles">${work.map(tile).join('')}</div>` : ''}
+    ${good.length ? `<div class="sc-h good">Already optimal</div><div class="tiles">${good.map(tile).join('')}</div>` : ''}
+  </div>`;
+}
+/** For the measures that need work: how far off the healthy range they are. */
+function workBars(s) {
+  const rows = scoreItems(s).filter((x) => x.st.cls === 'warn' && x.r).map((x) => {
+    const r = x.r, pts = x.keys.map((k, i) => ({ v: toNum(s[k]), tag: x.keys.length > 1 ? (i ? 'R' : 'L') : '' })).filter((p) => p.v != null);
     const lo = Math.min(r[0], ...pts.map((p) => p.v)), hi = Math.max(r[1], ...pts.map((p) => p.v)), pad0 = (hi - lo) * 0.25 || 1;
     const x0 = lo - pad0, x1 = hi + pad0, X = (v) => ((v - x0) / (x1 - x0)) * 100;
-    const st = pts.map((p) => rangeStatus(k === 'fat' ? 'fat' : p.k, p.v, p.r));
-    const worst = st.find((x) => x.cls === 'warn') || st[0];
-    const valTxt = pts.map((p) => `${p.tag ? `<span class="faint">${p.tag}</span> ` : ''}<b>${fmtN(p.v)}</b>`).join(' · ');
-    const need = worst.cls === 'warn' && pts.some((p) => p.v < p.r[0]) && k !== 'fat'
-      ? ` · +${fmtN(+Math.max(...pts.map((p) => p.r[0] - p.v)).toFixed(2))} to range` : '';
+    const gap = Math.max(...pts.map((p) => (p.v < r[0] ? r[0] - p.v : p.v > r[1] ? p.v - r[1] : 0)));
+    const dirUp = pts.some((p) => p.v < r[0]);
     return `<div class="rb">
-      <div class="rb-h"><span class="grow">${label}</span><span class="num">${valTxt} ${un || unit()}</span></div>
-      <div class="rb-track ${pts.length > 1 ? 'pair' : ''}" role="img" aria-label="${label}: ${pts.map((p) => `${p.tag} ${fmtN(p.v)}`).join(', ')}; healthy range ${r[0]} to ${r[1]}">
+      <div class="rb-h"><span class="grow">${x.name}</span><span class="num">${x.valTxt} ${x.un}</span></div>
+      <div class="rb-track ${pts.length > 1 ? 'pair' : ''}" role="img" aria-label="${x.name} ${x.valTxt}; range ${r[0]} to ${r[1]}">
         <span class="band" style="left:${X(r[0])}%;width:${X(r[1]) - X(r[0])}%" title="Healthy range ${r[0]}–${r[1]}"></span>
-        ${pts.map((p, i) => `<span class="mk ${st[i].cls}" style="left:${X(p.v)}%" title="${p.tag ? `${p.tag}: ` : ''}${fmtN(p.v)} — ${st[i].text}">${p.tag}</span>`).join('')}
+        ${pts.map((p) => { const st = p.v < r[0] || p.v > r[1] ? 'warn' : 'good'; return `<span class="mk ${st}" style="left:${X(p.v)}%" title="${p.tag ? `${p.tag}: ` : ''}${fmtN(p.v)}">${p.tag}</span>`; }).join('')}
       </div>
-      <div class="rb-f"><span class="st ${worst.cls}">${worst.icon} ${worst.text}${need}</span><span class="num faint">range ${r[0]}–${r[1]}</span></div>
+      <div class="rb-f"><span class="st warn">${x.st.icon} ${dirUp ? `+${fmtN(+gap.toFixed(2))} ${x.un} to reach range` : `${fmtN(+gap.toFixed(2))} ${x.un} over range`}</span><span class="num faint">range ${r[0]}–${r[1]}</span></div>
     </div>`;
-  }).filter(Boolean);
-  if (!rows.length) {
-    return `<div class="viz-block"><div class="viz-h"><b>Vs healthy range</b></div>
-      <p class="small muted">Add the healthy ranges from your sheet (the numbers in [brackets]) to a scan to see where you sit. Tap a scan below to edit it.</p></div>`;
+  });
+  return rows.length ? `<div class="viz-block"><div class="viz-h"><b>How far off</b><span class="small faint">grey band = healthy range</span></div>${rows.join('')}</div>` : '';
+}
+/** A value on a banded scale (BWI, WHO body fat, visceral level, bio age). */
+function gauge(title, v, bands, min, max, fmt, note) {
+  const X = (t) => ((Math.max(min, Math.min(max, t)) - min) / (max - min)) * 100;
+  const cur = bands.find((b) => v >= b.from && v < b.to) || bands[bands.length - 1];
+  return `<div class="gauge">
+    <div class="rb-h"><span class="grow">${title}</span><span class="num"><b>${fmt(v)}</b></span></div>
+    <div class="g-bands" role="img" aria-label="${title}: ${fmt(v)}, ${cur.label}">
+      ${bands.map((b) => `<span class="${b.good ? 'good' : ''} ${b === cur ? 'cur' : ''}" style="left:${X(b.from)}%;width:${X(b.to) - X(b.from)}%"><em>${b.label}</em></span>`).join('')}
+      <i class="g-mk ${cur.good ? 'good' : 'warn'}" style="left:${X(v)}%"></i>
+    </div>
+    <div class="small muted">${cur.good ? '✓' : '▼'} ${cur.label}${note ? ` · ${note}` : ''}</div>
+  </div>`;
+}
+const WHO_FAT = { // Evolt explainer, WHO/NIH body fat % tables: [age to, low<, normal<, high<]
+  F: [[39, 21, 33, 39], [59, 23, 35, 41], [79, 25, 38, 43]], M: [[39, 8, 21, 26], [59, 11, 23, 29], [79, 13, 25, 31]],
+};
+function gaugesViz(s) {
+  const out = [];
+  const bwi = toNum(s.bwi);
+  if (bwi != null) {
+    out.push(gauge('BWI score', bwi, [{ from: 5, to: 6, label: 'Poor' }, { from: 6, to: 7, label: 'Below avg' }, { from: 7, to: 8, label: 'Average' },
+      { from: 8, to: 9, label: 'Optimal', good: true }, { from: 9, to: 10.01, label: 'Athletic', good: true }], 5, 10, (v) => `${fmtN(v)}/10`,
+    bwi < 8 ? `+${fmtN(+(8 - bwi).toFixed(1))} to reach Optimal` : ''));
   }
-  return `<div class="viz-block"><div class="viz-h"><b>Vs healthy range</b><span class="small faint">grey band = healthy</span></div>${rows.join('')}</div>`;
+  const fat = toNum(s.fat), age = toNum(s.age);
+  if (fat != null) {
+    const row = (WHO_FAT[s.sex === 'M' ? 'M' : 'F']).find((r) => (age || 30) <= r[0]) || WHO_FAT.F[2];
+    const [, a, b, c] = row;
+    out.push(gauge(`Body fat % · WHO for ${s.sex === 'M' ? 'men' : 'women'} ${age ? (age < 40 ? '20–39' : age < 60 ? '40–59' : '60–79') : ''}`, fat,
+      [{ from: a - 9, to: a, label: 'Low' }, { from: a, to: b, label: 'Normal', good: true }, { from: b, to: c, label: 'High' }, { from: c, to: c + 9, label: 'Very high' }],
+      a - 9, c + 9, (v) => `${fmtN(v)}%`, `WHO normal ${a}–${b - 0.1}%`));
+  }
+  const vfl = toNum(s.vfl);
+  if (vfl != null) {
+    out.push(gauge('Visceral fat level', vfl, [{ from: 1, to: 6, label: 'Optimal', good: true }, { from: 6, to: 10, label: 'Balanced' }, { from: 10, to: 16, label: 'Over' }],
+      1, 16, (v) => String(Math.round(v)), ''));
+  }
+  const bio = toNum(s.bioAge);
+  if (bio != null && age != null) {
+    out.push(gauge('Bio age vs your age', bio, [{ from: age - 12, to: age + 0.5, label: 'Younger', good: true }, { from: age + 0.5, to: age + 12, label: 'Older' }],
+      age - 12, age + 12, (v) => `${v} yrs`, `your age is ${age}${bio < age ? ` — ${age - bio} years younger` : ''}`));
+  }
+  return out.length ? `<div class="viz-block"><div class="viz-h"><b>Health scores</b><span class="small faint">Evolt &amp; WHO guides</span></div>${out.join('')}</div>` : '';
 }
 
 /** Front-facing figure: each segment coloured by where its lean mass sits vs. range. */
 function bodyMapViz(s) {
-  const seg = (k) => { const v = toNum(s[k]); return { v, st: rangeStatus(k, v, rangeFor(k, s)) }; };
+  const seg = (k) => { const v = toNum(s[k]), f = statusOf(`${k}F`, s); return { v, st: statusOf(k, s), fatHigh: f && f.cls === 'warn' }; };
   const m = { armR: seg('armR'), armL: seg('armL'), legR: seg('legR'), legL: seg('legL'), torso: seg('torso') };
   if (!Object.values(m).some((x) => x.v != null)) return '';
   const cls = (x) => (x.st ? x.st.cls : 'none');
   const lab = (x, tag) => (x.v == null ? '' : `${tag} ${fmtN(x.v)}${x.st ? ` ${x.st.icon}` : ''}`);
+  const fatNote = (x, X, Y, anchor) => (x.fatHigh ? `<text class="fatnote" x="${X}" y="${Y}" text-anchor="${anchor}">fat ▲ over range</text>` : '');
   const tip = (x, n) => `<title>${n}: ${x.v == null ? 'no data' : `${fmtN(x.v)} ${unit()}${x.st ? ` — ${x.st.text}` : ''}`}</title>`;
   // the figure faces you, so the person's right side is on the left of the picture
   return `<div class="viz-block">
@@ -1335,6 +1474,7 @@ function bodyMapViz(s) {
       <rect class="b ${cls(m.legL)}" x="152" y="129" width="25" height="100" rx="12">${tip(m.legL, 'Left leg')}</rect>
       <text x="88" y="88" text-anchor="end">${lab(m.armR, 'R arm')}</text>
       <text x="212" y="88" text-anchor="start">${lab(m.armL, 'L arm')}</text>
+      ${fatNote(m.armR, 88, 103, 'end')}${fatNote(m.armL, 212, 103, 'start')}${fatNote(m.legR, 115, 199, 'end')}${fatNote(m.legL, 185, 199, 'start')}
       <text x="115" y="184" text-anchor="end">${lab(m.legR, 'R leg')}</text>
       <text x="185" y="184" text-anchor="start">${lab(m.legL, 'L leg')}</text>
       ${m.torso.v != null ? `<text class="in ${cls(m.torso)}" x="150" y="89" text-anchor="middle">${fmtN(m.torso.v)}</text>` : ''}
@@ -1367,7 +1507,7 @@ function bodyView() {
       ${goalTrack(g)}${paceChart(sc, g)}</div>` : '';
   const overview = `<div class="card">
       <div class="row"><b class="grow">Latest scan</b><span class="small muted">${fmtDate(latest.date)}</span></div>
-      ${compositionViz(latest, sc.length > 1 ? sc[0] : null)}${rangeViz(latest)}${bodyMapViz(latest)}
+      ${scorecardViz(latest)}${compositionViz(latest, sc.length > 1 ? sc[0] : null)}${workBars(latest)}${bodyMapViz(latest)}${gaugesViz(latest)}
     </div>`;
   return {
     title,
@@ -2092,9 +2232,12 @@ function importData(file) {
       merge: () => {
         db.sessions = db.sessions.concat(d.sessions.filter((s) => !db.sessions.some((x) => x.id === s.id)));
         db.scans = db.scans.concat(scans.filter((s) => !db.scans.some((x) => x.id === s.id)));
+        // same scan with more detail in the file (e.g. ranges added later) → take the fuller copy
+        let upd = 0;
+        scans.forEach((s) => { const i = db.scans.findIndex((x) => x.id === s.id); if (i >= 0 && Object.keys(s).length > Object.keys(db.scans[i]).length) { db.scans[i] = s; upd += 1; } });
         if (d.membership && !db.membership) db.membership = d.membership;
         if (!keepRoutine) { db.routine = d.routine; if (d.plan) db.plan = d.plan; }
-        save(); closeModal(); toast(`Imported ${fresh} workouts, ${freshScans} scans`); render();
+        save(); closeModal(); toast(`Imported ${fresh} workouts, ${freshScans} scans${upd ? `, updated ${upd}` : ''}`); render();
       },
       replace: () => {
         const base = defaults();

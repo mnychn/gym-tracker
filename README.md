@@ -1,4 +1,4 @@
-# Gym Log
+# Swole Cat
 
 A no-build progressive web app for tracking workouts: routine editing, weight/sets/reps logging, a workout clock, rest timers and progress charts. Data stays in each device's browser storage; use Settings → Export/Import to move it between devices.
 

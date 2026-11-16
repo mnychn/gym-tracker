@@ -1,4 +1,4 @@
-/* Gym Log — a no-build PWA. All data lives in localStorage on each device. */
+/* Swole Cat (formerly Gym Log) — a no-build PWA. All data lives in localStorage on each device. */
 (() => {
 'use strict';
 
@@ -911,7 +911,7 @@ function watchConfirm(w, as) {
       : k === 'walk' ? 'Saved to History; doesn’t count toward your targets.'
       : target === 'active' ? 'Adds time, calories and heart rate to the workout you’re logging now.'
       : target !== 'new' ? `Adds time, calories and heart rate to <b>${esc(gymToday[0].dayName)}</b> from the same day.`
-      : 'No Gym Log session that day, so it’s saved as a new gym session (no sets).'}</p>
+      : 'No Swole Cat session that day, so it’s saved as a new gym session (no sets).'}</p>
     ${k === 'class' ? `<div style="margin-top:10px"><label class="lbl">Class name</label><input class="field" id="w-name" value="${esc(/other|mixed|cross/i.test(w.type) ? 'Class' : w.type)}"></div>` : ''}
     <div class="row" style="margin-top:10px">
       <div class="grow"><label class="lbl">Minutes</label><input class="field" id="w-min" inputmode="numeric" value="${min || ''}"></div>
@@ -963,7 +963,7 @@ start: [Start Date]
 end: [End Date]
 duration: [Duration]</pre>
     <ol class="guide-list" start="4">
-      ${step(4, 'Add <b>Copy to Clipboard</b>, then <b>Show Notification</b> “Workout ready — open Gym Log and tap Paste from Watch”.')}
+      ${step(4, 'Add <b>Copy to Clipboard</b>, then <b>Show Notification</b> “Workout ready — open Swole Cat and tap Paste from Watch”.')}
       ${step(5, 'Tap ▶︎ once to test and tap <b>Allow</b> for Health access.')}
     </ol>
     <div class="section-title">2 · Run it automatically</div>
@@ -973,7 +973,7 @@ duration: [Duration]</pre>
       ${step(3, 'Next → choose <b>Gym Log workout</b>.')}
     </ol>
     <div class="section-title">3 · After each workout</div>
-    <p class="small muted">Open Gym Log → tap <b>From Watch</b> on the Weekly quest card (or the <b>+</b> button → <b>From Watch</b>) → <b>Paste</b> → check it → <b>Save</b>. Runs add to your jogging stars, classes are logged as a bonus class, and strength workouts attach calories and heart rate to that day’s Gym Log session.</p>
+    <p class="small muted">Open Swole Cat → tap <b>From Watch</b> on the Weekly quest card (or the <b>+</b> button → <b>From Watch</b>) → <b>Paste</b> → check it → <b>Save</b>. Runs add to your jogging stars, classes are logged as a bonus class, and strength workouts attach calories and heart rate to that day’s Gym Log session.</p>
     <p class="small muted"><b>Optional extras:</b> add more lines such as <i>distance: …</i>, <i>energy: …</i> or <i>heart rate: …</i> if you can pick them in your iOS version. If “Workouts” isn’t in the Type list, use <i>type: Running</i> and <i>duration: [Ask for Input]</i> instead.</p>
     <div class="actions"><button class="btn primary" data-act="m:close">Done</button></div>`,
   { close: closeModal });
@@ -2536,7 +2536,7 @@ views.mood = () => {
       ${toPms != null && toPms > 0 && toPms <= 3 ? `<p class="pms-warn">Heads up: your PMS window usually starts in ${plural(toPms, 'day')} (${shortDate(parseDay(cyc.pmsFrom))}). Mood swings around then are likely hormonal.</p>`
     : ph ? `<p class="small muted" style="margin:8px 0 0">${PHASE_NOTE[ph]}</p>` : ''}
       <p class="small muted" style="margin:6px 0 0">PMS usually starts <b>${plural(cyc.onset, 'day')}</b> before your period — ${cyc.learned ? `learned from ${plural(cyc.learned, 'cycle')} of symptoms you logged` : 'a starting guess; log PMS symptoms and it learns your real pattern'}.</p></section>`
-    : `<section class="card small muted mcycle">Log your period flow and PMS symptoms on the Cycle card each night. Gym Log will learn your cycle and how many days before your period your mood swings start, then warn you ahead of time.</section>`;
+    : `<section class="card small muted mcycle">Log your period flow and PMS symptoms on the Cycle card each night. Swole Cat will learn your cycle and how many days before your period your mood swings start, then warn you ahead of time.</section>`;
 
   let insights;
   if (days.length < 7) {
@@ -2577,7 +2577,7 @@ function moodModal(day, preset) {
   delete e.note;
   if (preset) e.mood = preset;
   const cyc = cycleInfo();
-  if (!prev) { // suggestions from what Gym Log already knows
+  if (!prev) { // suggestions from what the app already knows
     const y = db.moods[addDays(day, -1)];
     if (y && y.period >= 2 && cyc.phase(day) === 'period') e.period = y.period;
     daySessions(day).forEach((s) => {
@@ -2632,7 +2632,7 @@ function moodModal(day, preset) {
         <div class="row add-tag"><input class="field grow" data-new="pms" data-key="pmsTags" placeholder="Add your own" maxlength="28"><button class="btn sm soft" data-act="m:newtag" data-g="pms">Add</button></div></div>
       <div class="mq"><b>How strong were the symptoms?</b><div class="fchips" data-group="pms">${PMS_LEVEL.map((l, i) => one('pms', i, l)).join('')}</div></div>${noteBox('cycle')}`;
     },
-    move: () => `<h3>Out &amp; moving</h3>${workedOut(day) ? '<p class="small muted">Workouts you logged in Gym Log are already ticked.</p>' : ''}
+    move: () => `<h3>Out &amp; moving</h3>${workedOut(day) ? '<p class="small muted">Workouts you logged in Swole Cat are already ticked.</p>' : ''}
       <div class="mq"><b>Did you leave the house?</b><div class="fchips" data-group="out">${one('out', true, 'Yes')}${one('out', false, 'No, stayed in')}</div></div>
       <div class="mq"><b>Time outside</b><div class="fchips" data-group="outTime">${OUT_TIME.map((l, i) => one('outTime', i, l)).join('')}</div></div>
       ${tagGroup('Movement', 'move', MOVE_TAGS, 'move')}${tagGroup('Out and about', 'tags', OUT_TAGS, 'out')}${noteBox('move')}`,
@@ -3210,7 +3210,7 @@ function importData(file) {
   reader.onload = () => {
     let d;
     try { d = JSON.parse(reader.result); } catch (e) { toast('That file isn’t valid JSON'); return; }
-    if (!d || !Array.isArray(d.sessions) || !Array.isArray(d.routine)) { toast('Not a Gym Log backup file'); return; }
+    if (!d || !Array.isArray(d.sessions) || !Array.isArray(d.routine)) { toast('Not a Swole Cat backup file'); return; }
     const fresh = d.sessions.filter((s) => !db.sessions.some((x) => x.id === s.id)).length;
     const scans = Array.isArray(d.scans) ? d.scans : [];
     const freshScans = scans.filter((s) => !db.scans.some((x) => x.id === s.id || String(x.date).slice(0, 10) === String(s.date).slice(0, 10))).length;

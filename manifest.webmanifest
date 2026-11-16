@@ -1,7 +1,7 @@
 {
-  "name": "Gym Log",
-  "short_name": "Gym Log",
-  "description": "Track workouts, weights, sets, reps and rest.",
+  "name": "Swole Cat",
+  "short_name": "Swole Cat",
+  "description": "Workouts, body scans, mood and a gym cat that cheers you on.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

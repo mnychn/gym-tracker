@@ -107,110 +107,129 @@
      m = muscle power (this week's lifts / goal), j = leg power (this week's jog minutes / goal); 0 … 1 … 1.25.
      Arms thicken + biceps bulge with m; legs, sneakers, headband, sweat and speed lines grow with j; gold adds a crown. */
   const clamp = (v) => Math.max(0, Math.min(1.25, v || 0));
-  const bStyle = (m, j) => { const k = clamp(m), q = clamp(j); return { w: 11 + k * 11, b: 0.15 + k * 1.05, f: 0.8 + k * 0.35, k, lw: 8 + q * 7, sn: 0.7 + q * 0.45, q }; };
+  const bStyle = (m, j) => { const k = clamp(m), q = clamp(j); return { k, q }; };
   // Animated poses. Each pose loops between frame A and frame B (SMIL, so it runs on iOS too).
-  // Arms: [shoulder, elbow, hand]; legs: [hip, knee, foot]; dy = how far the body moves down in frame B.
-  const STAND = { l: [[92, 176], [90, 192], [88, 206]], r: [[128, 176], [130, 192], [132, 206]] };
+  // Arms: [shoulder, elbow, paw]; legs: [hip, knee, foot]; dy = how far the body moves in frame B.
+  const STAND = { l: [[90, 170], [88, 188], [86, 202]], r: [[130, 170], [132, 188], [134, 202]] };
   const FR = (a, b = a) => [a, b];
   const mirror = (a) => a.map(([x, y]) => [220 - x, y]);
   const POSES = {
-    nap: { dur: 3.4, l: FR([[62, 134], [50, 156], [80, 160]]), r: 'mirror' },
-    press: { dur: 1.9, bar: true, l: FR([[64, 128], [34, 140], [48, 116]], [[64, 124], [40, 86], [46, 40]]), r: 'mirror' },
-    curl: { dur: 1.5, db: true, l: FR([[62, 126], [50, 152], [52, 178]], [[62, 126], [50, 152], [64, 124]]), r: 'mirror' },
-    squat: { dur: 2.1, bar: true, behind: true, dy: 16, l: FR([[64, 122], [32, 112], [40, 92]]), r: 'mirror',
-      legs: { l: FR(STAND.l, [[92, 192], [62, 196], [84, 206]]), r: FR(STAND.r, [[128, 192], [158, 196], [136, 206]]) } },
-    flex: { dur: 1.2, l: FR([[62, 130], [14, 124], [18, 86]], [[62, 128], [10, 116], [24, 80]]), r: 'mirror' },
-    victory: { dur: 0.9, l: FR([[66, 118], [40, 86], [28, 54]], [[66, 118], [44, 82], [38, 48]]), r: 'mirror' },
-    wave: { dur: 0.8, l: FR([[62, 130], [14, 124], [18, 86]]), r: FR([[158, 122], [190, 104], [198, 70]], [[158, 122], [192, 100], [214, 76]]) },
-    run: { dur: 0.6, run: 1, dy: -6, l: FR([[64, 128], [40, 146], [28, 124]], [[64, 128], [46, 156], [30, 164]]), r: FR([[156, 128], [176, 156], [190, 164]], [[156, 128], [180, 146], [192, 124]]),
-      legs: { l: FR([[96, 176], [80, 192], [68, 204]], [[96, 170], [106, 190], [116, 204]]), r: FR([[124, 176], [136, 192], [148, 204]], [[124, 170], [114, 190], [104, 204]]) } },
-    jumprope: { dur: 0.8, rope: true, dy: -20, l: FR([[64, 130], [46, 150], [36, 150]]), r: 'mirror',
-      legs: { l: FR(STAND.l, [[92, 156], [84, 172], [92, 186]]), r: FR(STAND.r, [[128, 156], [136, 172], [128, 186]]) } },
+    nap: { dur: 3.4, l: FR([[62, 136], [50, 158], [52, 176]]), r: 'mirror' },
+    press: { dur: 1.9, bar: true, l: FR([[62, 126], [30, 140], [40, 112]], [[64, 120], [38, 84], [44, 40]]), r: 'mirror' },
+    curl: { dur: 1.5, db: true, l: FR([[62, 128], [40, 154], [38, 180]], [[62, 128], [36, 152], [40, 120]]), r: 'mirror' },
+    squat: { dur: 2.1, bar: true, behind: true, dy: 16, l: FR([[62, 120], [30, 112], [38, 90]]), r: 'mirror',
+      legs: { l: FR(STAND.l, [[90, 186], [64, 192], [82, 202]]), r: FR(STAND.r, [[130, 186], [156, 192], [138, 202]]) } },
+    flex: { dur: 1.2, l: FR([[62, 128], [16, 122], [20, 84]], [[62, 126], [12, 114], [26, 78]]), r: 'mirror' },
+    victory: { dur: 0.9, l: FR([[66, 116], [40, 84], [30, 50]], [[66, 116], [44, 80], [40, 46]]), r: 'mirror' },
+    wave: { dur: 0.8, l: FR([[62, 132], [40, 156], [40, 178]]), r: FR([[158, 120], [190, 102], [198, 66]], [[158, 120], [192, 98], [214, 72]]) },
+    run: { dur: 0.6, run: 1, dy: -6, l: FR([[62, 128], [36, 144], [28, 122]], [[62, 128], [42, 156], [30, 168]]), r: FR([[158, 128], [178, 156], [190, 168]], [[158, 128], [184, 144], [192, 122]]),
+      legs: { l: FR([[96, 170], [80, 188], [68, 200]], [[96, 166], [106, 186], [116, 200]]), r: FR([[124, 170], [136, 188], [150, 200]], [[124, 166], [114, 186], [104, 200]]) } },
+    jumprope: { dur: 0.8, rope: true, dy: -20, l: FR([[62, 132], [40, 150], [32, 150]]), r: 'mirror',
+      legs: { l: FR(STAND.l, [[90, 150], [84, 166], [90, 180]]), r: FR(STAND.r, [[130, 150], [136, 166], [130, 180]]) } },
   };
   A.POSES = Object.keys(POSES);
-  const pt = (p) => `${p[0]} ${p[1]}`;
+  const pt = (p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`;
   const SPL = 'keyTimes="0;.5;1" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" repeatCount="indefinite"';
   const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   /** <animate> between two values (nothing if they match or motion is reduced). */
   const anim = (attr, a, b, dur) => (still || a === b ? '' : `<animate attributeName="${attr}" values="${a};${b};${a}" dur="${dur}s" ${SPL}/>`);
   const animT = (type, a, b, dur) => (still || a === b ? '' : `<animateTransform attributeName="transform" type="${type}" values="${a};${b};${a}" dur="${dur}s" ${SPL}/>`);
-  const bic = ([S, E, H]) => {
+  /** Tapered limb segment a→b (width wa → wb) as a closed quad. */
+  const seg = (a, b, wa, wb) => {
+    const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1, nx = -dy / l, ny = dx / l;
+    return `M${pt([a[0] + nx * wa / 2, a[1] + ny * wa / 2])} L${pt([b[0] + nx * wb / 2, b[1] + ny * wb / 2])} L${pt([b[0] - nx * wb / 2, b[1] - ny * wb / 2])} L${pt([a[0] - nx * wa / 2, a[1] - ny * wa / 2])} Z`;
+  };
+  /** Bicep bulge on the upper arm, on the inside of the elbow bend (or upward when the arm is straight). */
+  const bic = ([S, E, H], wS, wE) => {
     const mx = (S[0] + E[0]) / 2, my = (S[1] + E[1]) / 2, len = Math.hypot(E[0] - S[0], E[1] - S[1]);
     let ang = (Math.atan2(E[1] - S[1], E[0] - S[0]) * 180) / Math.PI;
     const cross = (E[0] - S[0]) * (H[1] - S[1]) - (E[1] - S[1]) * (H[0] - S[0]);
     const up = Math.abs(cross) < 200 ? (Math.cos((ang * Math.PI) / 180) >= 0 ? 1 : -1) : -Math.sign(cross);
     if (up < 0) ang += 180;
-    return { mx, my, ang, hl: len * 0.36 };
+    return { mx, my, ang, rx: len * 0.34, off: (wS + wE) / 4 * 0.55 };
   };
   A.buddy = ({ m = 0, j = 0, gold = false, size = 160, pose = 'flex' } = {}) => {
     const st = bStyle(m, j), k = st.k, q = st.q, P0 = POSES[pose] || POSES.flex, D = P0.dur;
     const arms = { l: P0.l, r: P0.r === 'mirror' ? P0.l.map(mirror) : P0.r };
     const legs = P0.legs || { l: FR(STAND.l), r: FR(STAND.r) };
-    const d3 = (f) => `M${pt(f[0])} L${pt(f[1])} L${pt(f[2])}`;
-    const arm = (side, [A0, B0]) => {
-      const a = bic(A0), b = bic(B0);
+    // chunky, tapered limbs: thicker with muscle (arms) and leg power (legs)
+    const wS = 26 + k * 12, wE = 17 + k * 5, wH = 15 + k * 4, pr = wH / 2 + 3;
+    const wHip = 30 + q * 6, wKn = 22 + q * 5, wFt = 19 + q * 4;
+    const by = 2 + k * 11; // bicep bulge height
+    // every limb as a list of shapes; drawn twice (outline layer, then white fill layer) so they merge into one silhouette
+    const armShapes = ([A0, B0]) => {
+      const a = bic(A0, wS, wE), b = bic(B0, wS, wE);
       let bAng = b.ang; while (bAng - a.ang > 180) bAng -= 360; while (a.ang - bAng > 180) bAng += 360;
-      const R = 21, hl = a.hl;
-      const path = (cls, stroke, w) => `<path class="${cls}" d="${d3(A0)}" stroke="${stroke}" style="stroke-width:${w}px" fill="none" stroke-linecap="round" stroke-linejoin="round">${anim('d', d3(A0), d3(B0), D)}</path>`;
-      return `<g class="bd-armg ${side}">${path('bd-arm o', OUT, st.w + 6.5)}${path('bd-arm', '#fff', st.w)}
-        <g transform="translate(${a.mx} ${a.my})">${animT('translate', `${a.mx} ${a.my}`, `${b.mx} ${b.my}`, D)}<g transform="rotate(${a.ang.toFixed(1)})">${animT('rotate', a.ang.toFixed(1), bAng.toFixed(1), D)}
-          <g class="bd-bi" style="transform:scale(${st.b})"><path d="M${-hl} 1 A${hl} ${R} 0 0 1 ${hl} 1 Z" fill="#fff"/><path d="M${-hl} 1 A${hl} ${R} 0 0 1 ${hl} 1" stroke="${OUT}" stroke-width="2.6" fill="none" stroke-linecap="round"/></g></g></g>
-        <circle class="bd-fist" cx="${A0[2][0]}" cy="${A0[2][1]}" r="10" fill="#fff" stroke="${OUT}" stroke-width="3" style="transform:scale(${st.f})">${anim('cx', A0[2][0], B0[2][0], D)}${anim('cy', A0[2][1], B0[2][1], D)}</circle>
-      </g>`;
+      return (attrs) => `<path d="${seg(A0[0], A0[1], wS, wE)}" ${attrs}>${anim('d', seg(A0[0], A0[1], wS, wE), seg(B0[0], B0[1], wS, wE), D)}</path>
+        <path d="${seg(A0[1], A0[2], wE, wH)}" ${attrs}>${anim('d', seg(A0[1], A0[2], wE, wH), seg(B0[1], B0[2], wE, wH), D)}</path>
+        <circle cx="${A0[1][0]}" cy="${A0[1][1]}" r="${wE / 2}" ${attrs}>${anim('cx', A0[1][0], B0[1][0], D)}${anim('cy', A0[1][1], B0[1][1], D)}</circle>
+        <circle cx="${A0[2][0]}" cy="${A0[2][1]}" r="${pr}" ${attrs}>${anim('cx', A0[2][0], B0[2][0], D)}${anim('cy', A0[2][1], B0[2][1], D)}</circle>
+        <g transform="translate(${a.mx.toFixed(1)} ${a.my.toFixed(1)})">${animT('translate', `${a.mx.toFixed(1)} ${a.my.toFixed(1)}`, `${b.mx.toFixed(1)} ${b.my.toFixed(1)}`, D)}<g transform="rotate(${a.ang.toFixed(1)})">${animT('rotate', a.ang.toFixed(1), bAng.toFixed(1), D)}
+          <ellipse cx="0" cy="${(-a.off).toFixed(1)}" rx="${a.rx.toFixed(1)}" ry="${(a.off * 0.6 + by).toFixed(1)}" ${attrs}/></g></g>`;
     };
-    const leg = ([A0, B0], dir) => `<g class="bd-leg">
-        <path class="bd-lg o" d="${d3(A0)}" stroke="${OUT}" style="stroke-width:${st.lw + 6.5}px" stroke-linecap="round" stroke-linejoin="round" fill="none">${anim('d', d3(A0), d3(B0), D)}</path>
-        <path class="bd-lg" d="${d3(A0)}" stroke="#fff" style="stroke-width:${st.lw}px" stroke-linecap="round" stroke-linejoin="round" fill="none">${anim('d', d3(A0), d3(B0), D)}</path>
-        <g class="bd-shoe" style="transform:scale(${st.sn});opacity:${q > 0 ? 1 : 0}"><ellipse cx="${A0[2][0] + dir * 5}" cy="${A0[2][1] + 1}" rx="13" ry="6.5" fill="#fff" stroke="${OUT}" stroke-width="3">${anim('cx', A0[2][0] + dir * 5, B0[2][0] + dir * 5, D)}${anim('cy', A0[2][1] + 1, B0[2][1] + 1, D)}</ellipse>
-          <path class="bd-wing" d="M0 0 q${-dir * 14} -12 ${-dir * 20} -4 q${dir * 6} 2 ${dir * 4} 6 q${-dir * 8} 0 ${-dir * 12} 4 q${dir * 10} 4 ${dir * 16} 0z" transform="translate(${A0[2][0] - dir * 8} ${A0[2][1] - 2})" fill="#fff" stroke="${OUT}" stroke-width="2" style="opacity:${q >= 1 ? 1 : 0}">${animT('translate', `${A0[2][0] - dir * 8} ${A0[2][1] - 2}`, `${B0[2][0] - dir * 8} ${B0[2][1] - 2}`, D)}</path></g></g>`;
+    const legShapes = ([A0, B0], dir) => (attrs) => `<path d="${seg(A0[0], A0[1], wHip, wKn)}" ${attrs}>${anim('d', seg(A0[0], A0[1], wHip, wKn), seg(B0[0], B0[1], wHip, wKn), D)}</path>
+        <path d="${seg(A0[1], A0[2], wKn, wFt)}" ${attrs}>${anim('d', seg(A0[1], A0[2], wKn, wFt), seg(B0[1], B0[2], wKn, wFt), D)}</path>
+        <circle cx="${A0[1][0]}" cy="${A0[1][1]}" r="${wKn / 2}" ${attrs}>${anim('cx', A0[1][0], B0[1][0], D)}${anim('cy', A0[1][1], B0[1][1], D)}</circle>
+        <ellipse cx="${A0[2][0] + dir * 3}" cy="${A0[2][1]}" rx="${wFt / 2 + 3}" ry="${wFt / 2 - 1}" ${attrs}>${anim('cx', A0[2][0] + dir * 3, B0[2][0] + dir * 3, D)}${anim('cy', A0[2][1], B0[2][1], D)}</ellipse>`;
+    const TAIL = 'M150 172 C204 180 216 136 196 102';
     const run = P0.run || 0, dy = P0.dy || 0;
-    const speed = run ? `<g class="bd-speed">${[0, 1, 2].map((i) => `<path d="M${8 - i * 4} ${104 + i * 16} h26" stroke="${INK}" stroke-width="4" stroke-linecap="round" style="opacity:${q > i * 0.4 ? 1 : 0}"/>`).join('')}</g>` : '';
+    const body = (attrs, tailW, tailC) => `<path d="${TAIL}" stroke="${tailC}" stroke-width="${tailW}" fill="none" stroke-linecap="round"/>${armShapes(arms.l)(attrs)}${armShapes(arms.r)(attrs)}<path d="${BODY}" ${attrs}/>`;
+    const OUTL = `fill="${OUT}" stroke="${OUT}" stroke-width="7" stroke-linejoin="round"`, FILL = 'fill="#fff"';
+    const legsL = legShapes(legs.l, -1), legsR = legShapes(legs.r, 1);
+    const moveBody = animT('translate', '0 0', `0 ${dy}`, D);
+    const speed = run ? `<g class="bd-speed">${[0, 1, 2].map((i) => `<path d="M${6 - i * 4} ${104 + i * 16} h24" stroke="${INK}" stroke-width="4" stroke-linecap="round" style="opacity:${q > i * 0.4 ? 1 : 0}"/>`).join('')}</g>` : '';
     const happy = Math.max(k, q) >= 1, asleep = Math.max(k, q) <= 0;
-    const mouth = `<g class="bd-grin" style="opacity:${happy ? 1 : 0}"><path d="M105 92 q5 5 10 0 z" fill="${INK}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/></g>
-      <path class="bd-smile" d="M106 93 q4 3 8 0" stroke="${INK}" stroke-width="2.6" fill="none" stroke-linecap="round" style="opacity:${happy ? 0 : 1}"/>`;
-    const band = `<g class="bd-band" style="opacity:${q > 0 ? 1 : 0}"><g clip-path="url(#bd-clip)"><rect x="40" y="66" width="140" height="9" fill="${INK}"/></g><path d="M148 70 l16 -6 M148 72 l15 6" stroke="${INK}" stroke-width="5" stroke-linecap="round"/></g>
-      <path class="bd-sweat" d="M150 84 q4 7 0 10 q-4 -3 0 -10z" fill="#fff" stroke="${INK}" stroke-width="1.8" style="opacity:${q >= 0.5 ? 1 : 0}"/>`;
-    const crown = gold ? `<path d="M88 70 l-3 -22 14 12 11 -18 11 18 14 -12 -3 22 z" fill="#fff" stroke="${OUT}" stroke-width="3" stroke-linejoin="round" transform="translate(0 -14)"/>` : '';
-    // equipment that follows the hands
+    // expressions (from the reference sheets): calm dots, determined brows, "> <" strain, "^ ^" happy, puffing "o", asleep "- -"
+    const FACES = {
+      dot: `<circle cx="99" cy="84" r="3.3" fill="${INK}"/><circle cx="121" cy="84" r="3.3" fill="${INK}"/><path d="M106 93 q4 3 8 0" stroke="${INK}" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
+      focus: `<circle cx="99" cy="85" r="3.3" fill="${INK}"/><circle cx="121" cy="85" r="3.3" fill="${INK}"/><path d="M92 76 l10 4 M128 76 l-10 4" stroke="${INK}" stroke-width="2.8" stroke-linecap="round"/><path d="M106 94 h8" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>`,
+      strain: `<path d="M94 80 l7 4 -7 4 M126 80 l-7 4 7 4" stroke="${INK}" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M103 91 h14 v5 q-7 4 -14 0 z" fill="#fff" stroke="${INK}" stroke-width="2.4" stroke-linejoin="round"/><path d="M103 93.5 h14" stroke="${INK}" stroke-width="1.6"/><path d="M84 74 q-3 5 0 7 q3 -2 0 -7z" fill="#fff" stroke="${INK}" stroke-width="1.6"/>`,
+      happy: `<path d="M94 86 q5 -6 10 0 M116 86 q5 -6 10 0" stroke="${INK}" stroke-width="2.8" fill="none" stroke-linecap="round"/><path d="M104 91 q6 7 12 0 z" fill="${INK}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>`,
+      puff: `<circle cx="99" cy="84" r="3.3" fill="${INK}"/><circle cx="121" cy="84" r="3.3" fill="${INK}"/><ellipse cx="110" cy="94" rx="3.2" ry="3.8" fill="${INK}"/>`,
+      sleep: `<path d="M94 85 h8 M118 85 h8" stroke="${INK}" stroke-width="2.8" stroke-linecap="round"/><path d="M107 93 q3 2 6 0" stroke="${INK}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`,
+    };
+    const MOODS = { nap: ['sleep', 'sleep'], press: ['focus', 'strain'], curl: ['dot', 'strain'], squat: ['focus', 'strain'], flex: ['happy', 'strain'],
+      victory: ['happy', 'happy'], wave: ['happy', 'dot'], run: ['puff', 'focus'], jumprope: ['puff', 'happy'] };
+    const [fa, fb] = asleep ? ['sleep', 'sleep'] : MOODS[pose] || ['dot', 'dot'];
+    const swap = (vals) => (still ? '' : `<animate attributeName="opacity" values="${vals}" keyTimes="0;.25;.75" dur="${D}s" calcMode="discrete" repeatCount="indefinite"/>`);
+    const face = fa === fb ? `<g class="bd-eyes">${FACES[fa]}</g>`
+      : `<g class="bd-eyes">${FACES[fa]}${swap('1;0;1')}</g><g opacity="${still ? 0 : 0}">${FACES[fb]}${swap('0;1;0')}</g>`;
+    const band = q > 0 ? `<g clip-path="url(#bd-clip)"><rect x="40" y="66" width="140" height="9" fill="${INK}"/></g><path d="M148 70 l16 -6 M148 72 l15 6" stroke="${INK}" stroke-width="5" stroke-linecap="round"/>
+      ${q >= 0.5 ? `<path d="M150 84 q4 7 0 10 q-4 -3 0 -10z" fill="#fff" stroke="${INK}" stroke-width="1.8"/>` : ''}` : '';
+    const crown = gold ? `<path d="M88 56 l-3 -22 14 12 11 -18 11 18 14 -12 -3 22 z" fill="#fff" stroke="${OUT}" stroke-width="3" stroke-linejoin="round"/>` : '';
+    // sneakers once you've jogged; wings at the jogging goal
+    const shoe = ([A0, B0], dir) => (q > 0 ? `<g><path d="M-14 2 q0 -10 12 -10 q14 0 16 10 z" fill="#fff" stroke="${OUT}" stroke-width="3" stroke-linejoin="round" transform="scale(${dir < 0 ? -1 : 1} 1)"/>
+        ${q >= 1 ? `<path d="M${-dir * 10} -6 q${-dir * 14} -12 ${-dir * 20} -4 q${dir * 6} 2 ${dir * 4} 6 q${-dir * 8} 0 ${-dir * 12} 4 q${dir * 10} 4 ${dir * 16} 0z" fill="#fff" stroke="${OUT}" stroke-width="2"/>` : ''}
+        <animateTransform attributeName="transform" type="translate" values="${pt(A0[2])};${pt(B0[2])};${pt(A0[2])}" dur="${D}s" ${SPL}/></g>`.replace('<g>', `<g transform="translate(${pt(A0[2])})">`) : '');
+    // equipment that follows the paws
     const hA = [arms.l[0][2], arms.r[0][2]], hB = [arms.l[1][2], arms.r[1][2]];
     const plate = (x, y) => `<ellipse cx="${x}" cy="${y}" rx="9" ry="22" fill="#fff" stroke="${INK}" stroke-width="3"/><circle cx="${x}" cy="${y}" r="2.4" fill="${INK}"/>`;
-    const bar = P0.bar ? `<g>${animT('translate', '0 0', `0 ${hB[0][1] - hA[0][1]}`, D)}<path d="M${hA[0][0] - 16} ${hA[0][1]} H${hA[1][0] + 16}" stroke="${INK}" stroke-width="5" stroke-linecap="round"/>${plate(hA[0][0] - 24, hA[0][1])}${plate(hA[1][0] + 24, hA[1][1])}</g>` : '';
-    const db = P0.db ? [0, 1].map((i) => `<g transform="translate(${pt(hA[i])})">${animT('translate', pt(hA[i]), pt(hB[i]), D)}<path d="M-14 0 h28" stroke="${INK}" stroke-width="4" stroke-linecap="round"/><rect x="-20" y="-9" width="8" height="18" rx="3" fill="#fff" stroke="${INK}" stroke-width="2.6"/><rect x="12" y="-9" width="8" height="18" rx="3" fill="#fff" stroke="${INK}" stroke-width="2.6"/></g>`).join('') : '';
-    const rope = P0.rope ? `<path d="M36 150 Q110 -80 184 150" stroke="${INK}" stroke-width="2.6" fill="none">${anim('d', 'M36 150 Q110 -80 184 150', 'M36 150 Q110 268 184 150', D)}</path>` : '';
-    const wave = pose === 'wave' ? `<path d="M206 52 q6 4 4 12 M214 46 q7 6 4 16" stroke="${INK}" stroke-width="3" fill="none" stroke-linecap="round"/>` : '';
-    return `<svg class="buddy pose-${pose}" width="${size}" height="${size}" viewBox="0 -6 220 220" aria-hidden="true">
+    const bar = P0.bar ? `<g>${animT('translate', '0 0', `0 ${hB[0][1] - hA[0][1]}`, D)}<path d="M${hA[0][0] - 18} ${hA[0][1]} H${hA[1][0] + 18}" stroke="${INK}" stroke-width="5" stroke-linecap="round"/>${plate(hA[0][0] - 26, hA[0][1])}${plate(hA[1][0] + 26, hA[1][1])}</g>` : '';
+    const db = P0.db ? [0, 1].map((i) => `<g transform="translate(${pt(hA[i])})">${animT('translate', pt(hA[i]), pt(hB[i]), D)}<path d="M-15 0 h30" stroke="${INK}" stroke-width="4" stroke-linecap="round"/><rect x="-22" y="-10" width="9" height="20" rx="3" fill="#fff" stroke="${INK}" stroke-width="2.6"/><rect x="13" y="-10" width="9" height="20" rx="3" fill="#fff" stroke="${INK}" stroke-width="2.6"/></g>`).join('') : '';
+    const rope = P0.rope ? `<path d="M32 150 Q110 -80 188 150" stroke="${INK}" stroke-width="2.6" fill="none">${anim('d', 'M32 150 Q110 -80 188 150', 'M32 150 Q110 268 188 150', D)}</path>` : '';
+    const wave = pose === 'wave' ? `<path d="M206 48 q6 4 4 12 M214 42 q7 6 4 16" stroke="${INK}" stroke-width="3" fill="none" stroke-linecap="round"/>` : '';
+    return `<svg class="buddy pose-${pose}" data-pose="${pose}" data-gold="${gold ? 1 : ''}" width="${size}" height="${size}" viewBox="0 -6 220 220" aria-hidden="true">
       <defs><clipPath id="bd-clip"><path d="${BODY}"/></clipPath></defs>
       <ellipse class="bd-shadow" cx="110" cy="210" rx="62" ry="4" fill="${INK}" opacity=".08"/>
       ${speed}
-      <g class="bd-zzz" style="opacity:${asleep ? 1 : 0}"><path d="M156 44 h11 l-11 11 h11 M174 24 h8 l-8 8 h8 M188 8 h6 l-6 6 h6" stroke="${INK}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <g class="bd-zzz" style="opacity:${asleep ? 1 : 0}"><path d="M156 30 h11 l-11 11 h11 M174 12 h8 l-8 8 h8 M188 -2 h6 l-6 6 h6" stroke="${INK}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
       ${rope}
-      <g class="bd-all">${leg(legs.l, -1)}${leg(legs.r, 1)}
-        <g>${animT('translate', '0 0', `0 ${dy}`, D)}
-        ${P0.behind ? bar : ''}
-        <g class="bd-tail"><path d="M158 172 C196 172 202 132 184 112" stroke="${OUT}" stroke-width="13" fill="none" stroke-linecap="round"/><path d="M158 172 C196 172 202 132 184 112" stroke="#fff" stroke-width="7.5" fill="none" stroke-linecap="round"/></g>
-        <path d="${BODY}" fill="#fff" stroke="${OUT}" stroke-width="3.4" stroke-linejoin="round"/>
-        ${band}${crown}
-        <g class="bd-awake" style="opacity:${!asleep && !happy ? 1 : 0}"><g class="bd-eyes"><circle cx="99" cy="84" r="3.3" fill="${INK}"/><circle cx="121" cy="84" r="3.3" fill="${INK}"/></g></g>
-        <g class="bd-strain" style="opacity:${happy ? 1 : 0}"><path d="M94 80 l7 4 -7 4 M126 80 l-7 4 7 4" stroke="${INK}" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
-        <g class="bd-sleep" style="opacity:${asleep ? 1 : 0}"><path d="M94 85 h8 M118 85 h8" stroke="${INK}" stroke-width="2.8" stroke-linecap="round"/></g>
-        ${mouth}${arm('l', arms.l)}${arm('r', arms.r)}${P0.behind ? '' : bar}${db}${wave}
-      </g></g></svg>`;
+      <g class="bd-all">
+        ${P0.behind ? `<g>${moveBody}${bar}</g>` : ''}
+        ${legsL(OUTL)}${legsR(OUTL)}<g>${moveBody}${body(OUTL, 15, OUT)}</g>
+        ${legsL(FILL)}${legsR(FILL)}<g>${moveBody}${body(FILL, 8, '#fff')}</g>
+        ${shoe(legs.l, -1)}${shoe(legs.r, 1)}
+        <g>${moveBody}${band}${crown}${face}${P0.behind ? '' : bar}${db}${wave}</g>
+      </g></svg>`;
   };
   const BODY = catD(110, 120, 2.5);
-  /** Animate an existing Buddy to new muscle / leg power (CSS transitions do the swelling). */
+  /** Swap Buddy for a new muscle / leg power and give it a little "pump" bounce. */
   A.buddySet = (el, m, j) => {
-    if (!el) return; const st = bStyle(m, j);
-    const each = (sel, f) => el.querySelectorAll(sel).forEach(f);
-    each('.bd-arm', (p) => { p.style.strokeWidth = `${p.classList.contains('o') ? st.w + 6.5 : st.w}px`; });
-    each('.bd-bi', (p) => { p.style.transform = `scale(${st.b})`; });
-    each('.bd-fist', (p) => { p.style.transform = `scale(${st.f})`; });
-    each('.bd-lg', (p) => { p.style.strokeWidth = `${p.classList.contains('o') ? st.lw + 6.5 : st.lw}px`; });
-    each('.bd-shoe', (p) => { p.style.transform = `scale(${st.sn})`; });
-    each('.bd-wing', (p) => { p.style.opacity = st.q >= 1 ? 1 : 0; });
-    each('.bd-speed path', (p, i) => { p.style.opacity = st.q > i * 0.4 ? 1 : 0; });
-    const op = (sel, on) => each(sel, (n) => { n.style.opacity = on ? 1 : 0; });
-    const hi = Math.max(st.k, st.q);
-    op('.bd-awake', hi > 0 && hi < 1); op('.bd-strain', hi >= 1); op('.bd-sleep', hi <= 0); op('.bd-zzz', hi <= 0); op('.bd-grin', hi >= 1); op('.bd-smile', hi < 1); op('.bd-band', st.q > 0); op('.bd-sweat', st.q >= 0.5);
+    if (!el || !el.parentNode) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = A.buddy({ m, j, gold: !!el.dataset.gold, pose: el.dataset.pose, size: +el.getAttribute('width') });
+    const nu = wrap.firstElementChild; nu.classList.add('bd-pump');
+    el.replaceWith(nu);
   };
   window.ART = A;
 }());

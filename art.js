@@ -70,5 +70,53 @@
       <path d="M16 7h8v7h-8zM32 7h8v7h-8zM24 14h8v8h-8zM40 14h6l-2 4 2 4h-6zM16 22h8v7h-8zM32 22h8v7h-8z" fill="#fff" opacity=".9"/>`, s),
     wave: (s = 40) => svg(`${arm('M50 34 L58 18')}${blob(30, 40, 0.84)}${face(30, 41, 0.85)}<path d="M57 9 q4 3 3 8 M61 7 q4 4 2 10" stroke="${L}" stroke-width="2" fill="none" stroke-linecap="round"/>`, s),
   };
+
+  /* Buddy — the big mascot. m = muscle power (0 noodle arms … 1 weekly lifting goal … 1.25 extra), jog adds a headband, gold a crown. */
+  const bStyle = (m) => { const k = Math.max(0, Math.min(1.25, m || 0)); return { w: 11 + k * 11, b: 0.15 + k * 1.05, f: 0.8 + k * 0.35, k }; };
+  A.buddy = ({ m = 0, jog = false, gold = false, size = 160 } = {}) => {
+    const st = bStyle(m), k = st.k;
+    const BODY = 'M110 66 C150 66 170 98 170 128 C170 158 146 172 110 172 C74 172 50 158 50 128 C50 98 70 66 110 66 Z';
+    const arm = (side) => {
+      const x = (v) => (side < 0 ? v : 220 - v);
+      const d = `M${x(62)} 130 L${x(14)} 124 L${x(18)} 88`;
+      return `<g class="bd-armg ${side < 0 ? 'l' : 'r'}">
+        <path class="bd-arm o" d="${d}" stroke="${OUT}" style="stroke-width:${st.w + 4}px" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path class="bd-arm" d="${d}" stroke="#fff" style="stroke-width:${st.w}px" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <g class="bd-bi" style="transform:scale(${st.b})"><path d="M${x(17)} 126 A16 21 0 0 ${side < 0 ? 1 : 0} ${x(49)} 126 Z" fill="#fff"/>
+          <path d="M${x(17)} 126 A16 21 0 0 ${side < 0 ? 1 : 0} ${x(49)} 126" stroke="${OUT}" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+          <path d="M${x(36)} 112 q${side * -4} -3 ${side * -8} -1" stroke="${OUT}" stroke-width="2" fill="none" stroke-linecap="round" opacity=".8"/></g>
+        <circle class="bd-fist" cx="${x(18)}" cy="82" r="11" fill="#fff" stroke="${OUT}" stroke-width="2.5" style="transform:scale(${st.f})"/>
+        <path class="bd-pump" d="M${x(2)} 98 q${side * 7} 7 0 14 M${x(-5)} 94 q${side * 9} 10 0 21" stroke="${L}" stroke-width="2.6" fill="none" stroke-linecap="round" style="opacity:${k >= 0.6 ? 1 : 0}"/>
+      </g>`;
+    };
+    const brows = `<path class="bd-brows" d="M88 102 l10 3 M132 102 l-10 3" stroke="${INK}" stroke-width="3" stroke-linecap="round" style="opacity:${k < 0.34 ? 1 : 0}"/>`;
+    const mouth = `<g class="bd-grin" style="opacity:${k >= 1 ? 1 : 0}"><path d="M100 128 Q110 142 120 128 Z" fill="${INK}"/><path d="M104 134 Q110 139 116 134" stroke="#ff8fa3" stroke-width="3" fill="none" stroke-linecap="round"/></g>
+      <path class="bd-smile" d="M102 128 Q110 136 118 128" stroke="${INK}" stroke-width="3.4" fill="none" stroke-linecap="round" style="opacity:${k >= 1 ? 0 : 1}"/>`;
+    const band = jog ? `<g clip-path="url(#bd-clip)"><rect x="40" y="84" width="140" height="11" fill="${P}"/></g><path d="M166 88 l18 -8 M166 92 l17 6" stroke="${P}" stroke-width="5" stroke-linecap="round"/>
+      <path d="M156 104 q4 7 0 10 q-4 -3 0 -10z" fill="#9fd8ff"/>` : '';
+    const crown = gold ? `<path d="M88 70 l-3 -22 14 12 11 -18 11 18 14 -12 -3 22 z" fill="${Y}" stroke="${YD}" stroke-width="2.5" stroke-linejoin="round"/><circle cx="110" cy="56" r="3" fill="#fff"/>${sparkle(190, 50, 8, Y)}${sparkle(28, 50, 6, Y)}` : '';
+    return `<svg class="buddy" width="${size}" height="${Math.round(size * 0.9)}" viewBox="0 0 220 198" aria-hidden="true">
+      <defs><clipPath id="bd-clip"><path d="${BODY}"/></clipPath></defs>
+      <ellipse class="bd-shadow" cx="110" cy="182" rx="56" ry="8" fill="${INK}" opacity=".12"/>
+      <g class="bd-all">${arm(-1)}${arm(1)}
+        <path d="${BODY}" fill="#fff" stroke="${OUT}" stroke-width="3"/>
+        <ellipse cx="86" cy="86" rx="10" ry="6" fill="#fff" opacity=".9" transform="rotate(-30 86 86)"/>
+        ${band}${crown}${brows}
+        <g class="bd-eyes"><circle cx="96" cy="114" r="6.5" fill="${INK}"/><circle cx="124" cy="114" r="6.5" fill="${INK}"/>
+          <circle cx="98.4" cy="111.6" r="2.2" fill="#fff"/><circle cx="126.4" cy="111.6" r="2.2" fill="#fff"/></g>
+        <ellipse cx="80" cy="126" rx="9" ry="5.5" fill="${BL}" opacity=".85"/><ellipse cx="140" cy="126" rx="9" ry="5.5" fill="${BL}" opacity=".85"/>
+        ${mouth}
+      </g></svg>`;
+  };
+  /** Animate an existing Buddy to a new muscle power (CSS transitions do the swelling). */
+  A.buddySet = (el, m) => {
+    if (!el) return; const st = bStyle(m);
+    el.querySelectorAll('.bd-arm').forEach((p) => { p.style.strokeWidth = `${p.classList.contains('o') ? st.w + 4 : st.w}px`; });
+    el.querySelectorAll('.bd-bi').forEach((p) => { p.style.transform = `scale(${st.b})`; });
+    el.querySelectorAll('.bd-fist').forEach((p) => { p.style.transform = `scale(${st.f})`; });
+    el.querySelectorAll('.bd-pump').forEach((p) => { p.style.opacity = st.k >= 0.6 ? 1 : 0; });
+    const op = (sel, on) => { const n = el.querySelector(sel); if (n) n.style.opacity = on ? 1 : 0; };
+    op('.bd-brows', st.k < 0.34); op('.bd-grin', st.k >= 1); op('.bd-smile', st.k < 1);
+  };
   window.ART = A;
 }());

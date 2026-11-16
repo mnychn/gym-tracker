@@ -1155,15 +1155,15 @@ function fanfare(big) {
   else { tone(784, 0, 0.12, 0.2); tone(1175, 0.1, 0.18, 0.2); buzz(40); }
 }
 /** One surprise card in the middle of the screen; tap or wait to close. Returns a promise when it's gone. */
-function showSurprise({ emoji, title, sub, big }) {
+function showSurprise({ emoji, title, sub, big, grow }) {
   return new Promise((done) => {
     const fx = big ? 'big' : pick(FX);
     const el = document.createElement('div');
-    el.className = `surprise fx-${fx}`; el.setAttribute('role', 'status');
+    el.className = `surprise fx-${grow ? 'grow' : fx}`; el.setAttribute('role', 'status');
     const sparks = Array.from({ length: big ? 0 : 12 }, (_, i) => `<span style="--a:${i * 30 + Math.round(Math.random() * 14)}deg">${pick(['✨', '⭐', '💥', '★'])}</span>`).join('');
     const fw = big ? Array.from({ length: 5 }, () => `<div class="fw" style="left:${10 + Math.random() * 80}%;top:${8 + Math.random() * 45}%;animation-delay:${(Math.random() * 0.9).toFixed(2)}s">${
       Array.from({ length: 14 }, (_, i) => `<i style="--a:${i * (360 / 14)}deg;background:${pick(['#fab219', '#0ca30c', '#2a78d6', '#eb6834', '#e0457b'])}"></i>`).join('')}</div>`).join('') : '';
-    const pic = emoji.startsWith('<') ? emoji : ART[emoji] ? ART[emoji](big ? 120 : 100) : emoji;
+    const pic = grow ? ART.buddy({ m: grow.from, jog: grow.jog, gold: grow.gold, size: 190 }) : emoji.startsWith('<') ? emoji : ART[emoji] ? ART[emoji](big ? 120 : 100) : emoji;
     el.innerHTML = `${fw}<div class="sp-card"><div class="sp-emoji">${pic}</div><div class="sp-burst" aria-hidden="true">${sparks}</div>
       <div class="sp-title">${title}</div>${sub ? `<div class="sp-sub">${sub}</div>` : ''}</div>`;
     document.body.appendChild(el);
@@ -1172,7 +1172,8 @@ function showSurprise({ emoji, title, sub, big }) {
     let gone = false;
     const close = () => { if (gone) return; gone = true; el.classList.add('out'); setTimeout(() => { el.remove(); done(); }, 260); };
     el.addEventListener('click', close);
-    setTimeout(close, big ? 3200 : 2100);
+    if (grow) setTimeout(() => { const bd = el.querySelector('.buddy'); ART.buddySet(bd, grow.to); el.querySelector('.sp-emoji').classList.add('r-flex'); }, 650);
+    setTimeout(close, big ? 3400 : grow ? 2900 : 2100);
   });
 }
 /** Compare the weekly quest before/after a log and pick the best surprise(s). */
@@ -1188,6 +1189,18 @@ async function surpriseAfterLog(before, what) {
     if (!ev.length && a.m && a.m !== before.m) ev.push({ emoji: ART.medal(a.m, 100), title: `${MEDALS[a.m][1]} unlocked!`, sub: `${a.st.total}/${a.st.max} ★ this week` });
   }
   if (a.lv > before.lv) ev.push({ emoji: 'star', title: `Level ${a.lv}!`, sub: 'Level up — keep stacking stars' });
+  // a lifting session (own or with PT) → Buddy's muscles swell on screen
+  if (a.w.gym > before.w.gym) {
+    const grow = { from: before.w.gym / before.st.liftMax, to: a.w.gym / a.st.liftMax, jog: a.w.jogMin > 0, gold: a.m === 'gold' };
+    const head = ev[0];
+    if (head && head.big) { head.grow = grow; head.emoji = ''; } else {
+      const done = a.w.gym >= a.st.liftMax;
+      ev.unshift({ grow, emoji: '', title: done && before.w.gym < a.st.liftMax ? 'MAX MUSCLE!' : pick(['Muscles grew!', 'Look at these guns!', 'Bicep upgrade!', 'Getting swole!', 'Pump unlocked!']),
+        sub: `Buddy’s muscle power ${a.w.gym}/${a.st.liftMax}${a.st.total > before.st.total ? ` · +${a.st.total - before.st.total} ${ART.star(20)}` : ''}` });
+      if (ev.length > 2) ev.length = 2;
+      what = null;
+    }
+  }
   if (!ev.length) {
     const [emoji, title] = pick(POPS[what] || POPS.lift);
     const gained = a.st.total - before.st.total;
@@ -1357,6 +1370,43 @@ function weekStrip() {
   });
   return `<div class="strip-h small">Days this week</div><div class="dstrip" role="img" aria-label="This week's training days">${days.join('')}</div>`;
 }
+// ---------------------------------------------------------------- Buddy, the mascot: muscles grow with this week's lifting sessions
+function buddyState() {
+  const g = db.goals, ws = weekStartOf(new Date()), w = weekStats(ws), st = weekStars(w, g);
+  return { w, st, m: w.gym / st.liftMax, jog: w.jogMin > 0, gold: medalOf(st) === 'gold' };
+}
+function buddyLines(b) {
+  const left = b.st.liftMax - b.w.gym;
+  const base = b.w.gym === 0 ? ['New week, noodle arms! Let’s lift and pump me up', 'Feed me a lifting session and watch me grow', 'My arms are spaghetti right now…']
+    : left > 0 ? [`${plural(left, 'more lift')} and I’ll be fully swole!`, `Muscle power ${b.w.gym}/${b.st.liftMax}. Feel these guns!`, 'Ooh, I can feel the pump']
+    : ['MAXIMUM MUSCLE! Look at these biceps!', 'We’re so strong this week', 'Lifting goal done — flex with me!'];
+  if (b.jog) base.push('Love the headband? That’s from your jogging');
+  else base.push('A jog gets me my headband');
+  if (b.gold) base.push('Gold week! Check out my crown');
+  return base;
+}
+function buddyCard() {
+  const b = buddyState();
+  const pips = Array.from({ length: Math.max(b.st.liftMax, b.w.gym) }, (_, i) => `<i class="${i < b.w.gym ? 'on' : ''}"></i>`).join('');
+  return `<section class="card buddy-card">
+    <button class="buddy-btn" data-act="buddy-tap" aria-label="Poke Buddy">${ART.buddy({ m: b.m, jog: b.jog, gold: b.gold, size: 168 })}</button>
+    <div class="bd-side">
+      <div class="bd-bubble" id="bd-say" aria-live="polite">${buddyLines(b)[0]}</div>
+      <div class="bd-meter"><span class="small muted">Muscle power</span><span class="bd-pips" role="img" aria-label="${b.w.gym} of ${b.st.liftMax} lifts">${pips}</span></div>
+      <div class="small faint">Tap Buddy · grows with every lift</div>
+    </div></section>`;
+}
+const POKE = ['r-flex', 'r-jump', 'r-wiggle', 'r-flex', 'r-spin'];
+function buddyPoke(btn) {
+  ui.pokes = (ui.pokes || 0) + 1;
+  const b = buddyState(), lines = buddyLines(b);
+  const say = $('#bd-say');
+  const giggle = ui.pokes % 7 === 0;
+  if (say) { say.textContent = giggle ? 'Hehe, that tickles!' : lines[ui.pokes % lines.length]; say.classList.remove('pop'); void say.offsetWidth; say.classList.add('pop'); }
+  POKE.forEach((c) => btn.classList.remove(c)); void btn.offsetWidth;
+  btn.classList.add(giggle ? 'r-wiggle' : POKE[ui.pokes % POKE.length]);
+  try { if (navigator.vibrate) navigator.vibrate(15); } catch (e) { /* ignore */ }
+}
 /** Floating + : quick ways to log something. */
 function quickAdd() {
   const nd = nextDay();
@@ -1412,6 +1462,7 @@ function idleView() {
     body: `${weekStrip()}<div class="stack">
       ${notice}
       ${memUrgent(memInfo()) ? membershipCard() : ''}
+      ${buddyCard()}
       ${weekCard()}
       ${hero}
     </div>
@@ -2327,6 +2378,7 @@ document.addEventListener('click', async (ev) => {
     case 'quick-log': quickLogModal(t.dataset.k); break;
     case 'watch-paste': pasteFromWatch(); break;
     case 'quick-add': quickAdd(); break;
+    case 'buddy-tap': buddyPoke(t); break;
     case 'pt-log': ptLogModal(); break;
     case 'week-detail': weekModal(+t.dataset.ws); break;
     case 'watch-setup': watchSetup(); break;

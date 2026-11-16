@@ -970,3 +970,21 @@ button.shelf-c:active { transform: scale(.94); }
   .buddy .bd-all, .buddy .bd-eyes, .r-flex .bd-armg, .r-flex .bd-bi, .r-jump .buddy, .r-wiggle .buddy, .r-spin .buddy { animation: none !important; }
 }
 .buddy .bd-brows, .buddy .bd-grin, .buddy .bd-smile { transition: opacity .3s .5s; }
+/* Buddy inside the weekly quest */
+.q-buddy { display: flex; align-items: center; gap: 4px; margin: 6px -8px 4px -10px; }
+.q-buddy .bd-bubble { color: #34304d; background: #fff; font-size: 14.5px; }
+.q-buddy .bd-bubble::before { border-right-color: #fff; }
+.q-buddy .bd-meter .il svg { flex: none; }
+.bd-pips.peach i { border-color: #f0803f; } .bd-pips.peach i.on { background: #f7a259; }
+.q-buddy .bd-pips i { background: rgba(255,255,255,.7); }
+.q-buddy .bd-pips i.on { background: var(--lav); } .q-buddy .bd-pips.peach i.on { background: #f7a259; }
+.road .runner .buddy { margin-bottom: -2px; }
+.road .runner .buddy .bd-all, .road .runner .buddy .bd-eyes { animation: none; }
+.road .runner .bd-shadow { display: none; }
+.wk-head .wk-bd { flex: none; margin: -8px -4px -8px -8px; }
+.wk-head .q-medal { flex: none; }
+.buddy .bd-shoe { transform-box: fill-box; transform-origin: 50% 50%; transition: transform .9s cubic-bezier(.3,1.8,.5,1); }
+.buddy .bd-lg { transition: stroke-width .9s cubic-bezier(.3,1.7,.5,1); }
+.buddy .bd-wing, .buddy .bd-speed path, .buddy .bd-band, .buddy .bd-sweat { transition: opacity .4s .5s; }
+.r-jump .bd-wing { animation: bd-flap .25s ease-in-out 4; transform-box: fill-box; transform-origin: 100% 100%; }
+@keyframes bd-flap { 50% { transform: rotate(-18deg); } }

@@ -71,52 +71,98 @@
     wave: (s = 40) => svg(`${arm('M50 34 L58 18')}${blob(30, 40, 0.84)}${face(30, 41, 0.85)}<path d="M57 9 q4 3 3 8 M61 7 q4 4 2 10" stroke="${L}" stroke-width="2" fill="none" stroke-linecap="round"/>`, s),
   };
 
-  /* Buddy — the big mascot. m = muscle power (0 noodle arms … 1 weekly lifting goal … 1.25 extra), jog adds a headband, gold a crown. */
-  const bStyle = (m) => { const k = Math.max(0, Math.min(1.25, m || 0)); return { w: 11 + k * 11, b: 0.15 + k * 1.05, f: 0.8 + k * 0.35, k }; };
-  A.buddy = ({ m = 0, jog = false, gold = false, size = 160 } = {}) => {
-    const st = bStyle(m), k = st.k;
-    const BODY = 'M110 66 C150 66 170 98 170 128 C170 158 146 172 110 172 C74 172 50 158 50 128 C50 98 70 66 110 66 Z';
-    const arm = (side) => {
-      const x = (v) => (side < 0 ? v : 220 - v);
-      const d = `M${x(62)} 130 L${x(14)} 124 L${x(18)} 88`;
-      return `<g class="bd-armg ${side < 0 ? 'l' : 'r'}">
+  /* Buddy — the big mascot.
+     m = muscle power (this week's lifts / goal), j = leg power (this week's jog minutes / goal); 0 … 1 … 1.25.
+     Arms thicken + biceps bulge with m; legs, sneakers, headband, sweat and speed lines grow with j; gold adds a crown. */
+  const clamp = (v) => Math.max(0, Math.min(1.25, v || 0));
+  const bStyle = (m, j) => { const k = clamp(m), q = clamp(j); return { w: 11 + k * 11, b: 0.15 + k * 1.05, f: 0.8 + k * 0.35, k, lw: 8 + q * 7, sn: 0.7 + q * 0.45, q }; };
+  // [shoulder, elbow, hand] per arm; x mirrored for the right arm when given as 'mirror'
+  const POSES = {
+    flex: { l: [[62, 130], [14, 124], [18, 86]], r: 'mirror' },
+    flexOne: { l: [[62, 130], [14, 124], [18, 86]], r: [[160, 136], [186, 152], [166, 164]] },
+    victory: { l: [[66, 118], [40, 86], [28, 54]], r: 'mirror' },
+    lift: { l: [[66, 116], [34, 92], [52, 58]], r: 'mirror', bar: true },
+    wave: { l: [[62, 130], [14, 124], [18, 86]], r: [[158, 122], [190, 104], [200, 70]], wave: true },
+    run: { l: [[64, 128], [40, 150], [22, 128]], r: [[156, 126], [186, 118], [200, 142]], run: 1 },
+    run2: { l: [[64, 126], [34, 118], [20, 142]], r: [[156, 128], [180, 150], [198, 128]], run: -1 },
+  };
+  A.POSES = Object.keys(POSES);
+  const pt = (p) => `${p[0]} ${p[1]}`;
+  A.buddy = ({ m = 0, j = 0, gold = false, size = 160, pose = 'flex' } = {}) => {
+    const st = bStyle(m, j), k = st.k, q = st.q, P0 = POSES[pose] || POSES.flex;
+    const mir = (a) => a.map(([x, y]) => [220 - x, y]);
+    const arms = { l: P0.l, r: P0.r === 'mirror' ? mir(P0.l) : P0.r };
+    const arm = (side, [S, E, H]) => {
+      const d = `M${pt(S)} L${pt(E)} L${pt(H)}`;
+      // biceps: a half-ellipse on the upper arm, on the side the hand is (or upward for straight arms)
+      const mx = (S[0] + E[0]) / 2, my = (S[1] + E[1]) / 2, len = Math.hypot(E[0] - S[0], E[1] - S[1]);
+      let ang = (Math.atan2(E[1] - S[1], E[0] - S[0]) * 180) / Math.PI;
+      const cross = (E[0] - S[0]) * (H[1] - S[1]) - (E[1] - S[1]) * (H[0] - S[0]);
+      const up = Math.abs(cross) < 200 ? (Math.cos((ang * Math.PI) / 180) >= 0 ? 1 : -1) : -Math.sign(cross); // +1 = bulge on the local "top"
+      if (up < 0) ang += 180;
+      const hl = len * 0.36, R = 21;
+      return `<g class="bd-armg ${side}">
         <path class="bd-arm o" d="${d}" stroke="${OUT}" style="stroke-width:${st.w + 4}px" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
         <path class="bd-arm" d="${d}" stroke="#fff" style="stroke-width:${st.w}px" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-        <g class="bd-bi" style="transform:scale(${st.b})"><path d="M${x(17)} 126 A16 21 0 0 ${side < 0 ? 1 : 0} ${x(49)} 126 Z" fill="#fff"/>
-          <path d="M${x(17)} 126 A16 21 0 0 ${side < 0 ? 1 : 0} ${x(49)} 126" stroke="${OUT}" stroke-width="2.6" fill="none" stroke-linecap="round"/>
-          <path d="M${x(36)} 112 q${side * -4} -3 ${side * -8} -1" stroke="${OUT}" stroke-width="2" fill="none" stroke-linecap="round" opacity=".8"/></g>
-        <circle class="bd-fist" cx="${x(18)}" cy="82" r="11" fill="#fff" stroke="${OUT}" stroke-width="2.5" style="transform:scale(${st.f})"/>
-        <path class="bd-pump" d="M${x(2)} 98 q${side * 7} 7 0 14 M${x(-5)} 94 q${side * 9} 10 0 21" stroke="${L}" stroke-width="2.6" fill="none" stroke-linecap="round" style="opacity:${k >= 0.6 ? 1 : 0}"/>
+        <g transform="translate(${mx} ${my}) rotate(${ang.toFixed(1)})"><g class="bd-bi" style="transform:scale(${st.b})">
+          <path d="M${-hl} 1 A${hl} ${R} 0 0 1 ${hl} 1 Z" fill="#fff"/><path d="M${-hl} 1 A${hl} ${R} 0 0 1 ${hl} 1" stroke="${OUT}" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+          <path d="M${-hl * 0.2} -12 q4 -3 8 -1" stroke="${OUT}" stroke-width="2" fill="none" stroke-linecap="round" opacity=".8"/></g></g>
+        <circle class="bd-fist" cx="${H[0]}" cy="${H[1]}" r="11" fill="#fff" stroke="${OUT}" stroke-width="2.5" style="transform:scale(${st.f})"/>
       </g>`;
     };
-    const brows = `<path class="bd-brows" d="M88 102 l10 3 M132 102 l-10 3" stroke="${INK}" stroke-width="3" stroke-linecap="round" style="opacity:${k < 0.34 ? 1 : 0}"/>`;
-    const mouth = `<g class="bd-grin" style="opacity:${k >= 1 ? 1 : 0}"><path d="M100 128 Q110 142 120 128 Z" fill="${INK}"/><path d="M104 134 Q110 139 116 134" stroke="#ff8fa3" stroke-width="3" fill="none" stroke-linecap="round"/></g>
-      <path class="bd-smile" d="M102 128 Q110 136 118 128" stroke="${INK}" stroke-width="3.4" fill="none" stroke-linecap="round" style="opacity:${k >= 1 ? 0 : 1}"/>`;
-    const band = jog ? `<g clip-path="url(#bd-clip)"><rect x="40" y="84" width="140" height="11" fill="${P}"/></g><path d="M166 88 l18 -8 M166 92 l17 6" stroke="${P}" stroke-width="5" stroke-linecap="round"/>
-      <path d="M156 104 q4 7 0 10 q-4 -3 0 -10z" fill="#9fd8ff"/>` : '';
-    const crown = gold ? `<path d="M88 70 l-3 -22 14 12 11 -18 11 18 14 -12 -3 22 z" fill="${Y}" stroke="${YD}" stroke-width="2.5" stroke-linejoin="round"/><circle cx="110" cy="56" r="3" fill="#fff"/>${sparkle(190, 50, 8, Y)}${sparkle(28, 50, 6, Y)}` : '';
-    return `<svg class="buddy" width="${size}" height="${Math.round(size * 0.9)}" viewBox="0 0 220 198" aria-hidden="true">
+    // legs: standing, or mid-stride when running
+    const run = P0.run || 0;
+    const legs = run
+      ? [[[96, 164], [run > 0 ? 70 : 150, 180], run > 0 ? -1 : 1], [[124, 164], [run > 0 ? 150 : 70, 186], run > 0 ? 1 : -1]]
+      : [[[94, 164], [86, 188], -1], [[126, 164], [134, 188], 1]];
+    const legSvg = legs.map(([h, f, dir]) => `<g class="bd-leg">
+        <path class="bd-lg o" d="M${pt(h)} L${pt(f)}" stroke="${OUT}" style="stroke-width:${st.lw + 4}px" stroke-linecap="round"/>
+        <path class="bd-lg" d="M${pt(h)} L${pt(f)}" stroke="#fff" style="stroke-width:${st.lw}px" stroke-linecap="round"/>
+        <g class="bd-shoe" style="transform:scale(${st.sn})"><ellipse cx="${f[0] + dir * 6}" cy="${f[1] + 2}" rx="15" ry="8.5" fill="${dir < 0 ? P : PD}"/>
+          <path d="M${f[0] + dir * 6 - 9} ${f[1] + 6} h18" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+          <path class="bd-wing" d="M${f[0] - dir * 8} ${f[1] - 2} q${-dir * 14} -12 ${-dir * 20} -4 q${dir * 6} 2 ${dir * 4} 6 q${-dir * 8} 0 ${-dir * 12} 4 q${dir * 10} 4 ${dir * 16} 0z" fill="#fff" stroke="${OUT}" stroke-width="2" style="opacity:${q >= 1 ? 1 : 0}"/></g></g>`).join('');
+    const speed = run ? `<g class="bd-speed">${[0, 1, 2].map((i) => `<path d="M${run > 0 ? 8 - i * 4 : 212 + i * 4} ${104 + i * 16} h${run > 0 ? 26 : -26}" stroke="${L}" stroke-width="4" stroke-linecap="round" style="opacity:${q > i * 0.4 ? 1 : 0}"/>`).join('')}</g>` : '';
+    const brows = `<path class="bd-brows" d="M88 102 l10 3 M132 102 l-10 3" stroke="${INK}" stroke-width="3" stroke-linecap="round" style="opacity:${Math.max(k, q) < 0.34 ? 1 : 0}"/>`;
+    const happy = Math.max(k, q) >= 1;
+    const mouth = `<g class="bd-grin" style="opacity:${happy ? 1 : 0}"><path d="M100 128 Q110 142 120 128 Z" fill="${INK}"/><path d="M104 134 Q110 139 116 134" stroke="#ff8fa3" stroke-width="3" fill="none" stroke-linecap="round"/></g>
+      <path class="bd-smile" d="M102 128 Q110 136 118 128" stroke="${INK}" stroke-width="3.4" fill="none" stroke-linecap="round" style="opacity:${happy ? 0 : 1}"/>`;
+    const tails = run < 0 ? 'M54 88 l-18 -8 M54 92 l-17 6' : 'M166 88 l18 -8 M166 92 l17 6';
+    const band = `<g class="bd-band" style="opacity:${q > 0 ? 1 : 0}"><g clip-path="url(#bd-clip)"><rect x="40" y="84" width="140" height="11" fill="${P}"/></g><path d="${tails}" stroke="${P}" stroke-width="5" stroke-linecap="round"/></g>
+      <path class="bd-sweat" d="M156 104 q4 7 0 10 q-4 -3 0 -10z" fill="#9fd8ff" style="opacity:${q >= 0.5 ? 1 : 0}"/>`;
+    const crown = gold ? `<path d="M88 70 l-3 -22 14 12 11 -18 11 18 14 -12 -3 22 z" fill="${Y}" stroke="${YD}" stroke-width="2.5" stroke-linejoin="round"/><circle cx="110" cy="56" r="3" fill="#fff"/>${sparkle(190, 40, 8, Y)}${sparkle(28, 40, 6, Y)}` : '';
+    const bar = P0.bar ? (() => { const [a, b] = [arms.l[2], arms.r[2]]; return `<rect x="${a[0] - 14}" y="${a[1] - 3}" width="${b[0] - a[0] + 28}" height="6" rx="3" fill="${LD}"/>
+      <rect x="${a[0] - 24}" y="${a[1] - 15}" width="11" height="30" rx="4" fill="${L}"/><rect x="${b[0] + 13}" y="${b[1] - 15}" width="11" height="30" rx="4" fill="${L}"/>`; })() : '';
+    const wave = P0.wave ? `<path d="M206 52 q6 4 4 12 M214 46 q7 6 4 16" stroke="${L}" stroke-width="3" fill="none" stroke-linecap="round"/>` : '';
+    const lean = run ? ` transform="rotate(${run * 5} 110 160)"` : '';
+    return `<svg class="buddy pose-${pose}" width="${size}" height="${Math.round(size * 0.94)}" viewBox="0 0 220 206" aria-hidden="true">
       <defs><clipPath id="bd-clip"><path d="${BODY}"/></clipPath></defs>
-      <ellipse class="bd-shadow" cx="110" cy="182" rx="56" ry="8" fill="${INK}" opacity=".12"/>
-      <g class="bd-all">${arm(-1)}${arm(1)}
+      <ellipse class="bd-shadow" cx="110" cy="196" rx="56" ry="7" fill="${INK}" opacity=".12"/>
+      ${speed}
+      <g class="bd-all"><g${lean}>${legSvg}${arm('l', arms.l)}${arm('r', arms.r)}
         <path d="${BODY}" fill="#fff" stroke="${OUT}" stroke-width="3"/>
         <ellipse cx="86" cy="86" rx="10" ry="6" fill="#fff" opacity=".9" transform="rotate(-30 86 86)"/>
         ${band}${crown}${brows}
         <g class="bd-eyes"><circle cx="96" cy="114" r="6.5" fill="${INK}"/><circle cx="124" cy="114" r="6.5" fill="${INK}"/>
           <circle cx="98.4" cy="111.6" r="2.2" fill="#fff"/><circle cx="126.4" cy="111.6" r="2.2" fill="#fff"/></g>
         <ellipse cx="80" cy="126" rx="9" ry="5.5" fill="${BL}" opacity=".85"/><ellipse cx="140" cy="126" rx="9" ry="5.5" fill="${BL}" opacity=".85"/>
-        ${mouth}
-      </g></svg>`;
+        ${mouth}${bar}${wave}
+      </g></g></svg>`;
   };
-  /** Animate an existing Buddy to a new muscle power (CSS transitions do the swelling). */
-  A.buddySet = (el, m) => {
-    if (!el) return; const st = bStyle(m);
-    el.querySelectorAll('.bd-arm').forEach((p) => { p.style.strokeWidth = `${p.classList.contains('o') ? st.w + 4 : st.w}px`; });
-    el.querySelectorAll('.bd-bi').forEach((p) => { p.style.transform = `scale(${st.b})`; });
-    el.querySelectorAll('.bd-fist').forEach((p) => { p.style.transform = `scale(${st.f})`; });
-    el.querySelectorAll('.bd-pump').forEach((p) => { p.style.opacity = st.k >= 0.6 ? 1 : 0; });
-    const op = (sel, on) => { const n = el.querySelector(sel); if (n) n.style.opacity = on ? 1 : 0; };
-    op('.bd-brows', st.k < 0.34); op('.bd-grin', st.k >= 1); op('.bd-smile', st.k < 1);
+  const BODY = 'M110 66 C150 66 170 98 170 128 C170 158 146 172 110 172 C74 172 50 158 50 128 C50 98 70 66 110 66 Z';
+  /** Animate an existing Buddy to new muscle / leg power (CSS transitions do the swelling). */
+  A.buddySet = (el, m, j) => {
+    if (!el) return; const st = bStyle(m, j);
+    const each = (sel, f) => el.querySelectorAll(sel).forEach(f);
+    each('.bd-arm', (p) => { p.style.strokeWidth = `${p.classList.contains('o') ? st.w + 4 : st.w}px`; });
+    each('.bd-bi', (p) => { p.style.transform = `scale(${st.b})`; });
+    each('.bd-fist', (p) => { p.style.transform = `scale(${st.f})`; });
+    each('.bd-lg', (p) => { p.style.strokeWidth = `${p.classList.contains('o') ? st.lw + 4 : st.lw}px`; });
+    each('.bd-shoe', (p) => { p.style.transform = `scale(${st.sn})`; });
+    each('.bd-wing', (p) => { p.style.opacity = st.q >= 1 ? 1 : 0; });
+    each('.bd-speed path', (p, i) => { p.style.opacity = st.q > i * 0.4 ? 1 : 0; });
+    const op = (sel, on) => each(sel, (n) => { n.style.opacity = on ? 1 : 0; });
+    const hi = Math.max(st.k, st.q);
+    op('.bd-brows', hi < 0.34); op('.bd-grin', hi >= 1); op('.bd-smile', hi < 1); op('.bd-band', st.q > 0); op('.bd-sweat', st.q >= 0.5);
   };
   window.ART = A;
 }());

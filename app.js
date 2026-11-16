@@ -1028,7 +1028,7 @@ function jogRoad(w, st) {
   return `<div class="road" role="img" aria-label="${w.jogMin} of ${Math.round(goal)} minutes jogging">
       <span class="road-fill" style="width:${X(w.jogMin)}%"></span>
       ${flags.map((m, i) => `<i class="flag ${w.jogMin >= m ? 'on' : ''} ${i === flags.length - 1 ? 'fin' : ''}" style="left:${X(m)}%">${i === flags.length - 1 ? ART.flag(20) : '★'}</i>`).join('')}
-      <b class="runner" style="left:${X(w.jogMin)}%">${ART.jog(34)}</b>
+      <b class="runner" style="left:${X(w.jogMin)}%">${ART.buddy({ m: 0, j: w.jogMin / goal, pose: 'run', size: 46 })}</b>
     </div>
     <div class="jogscale">${flags.map((m) => `<span style="left:${X(m)}%">${m % 60 ? `${Math.round(m)}m` : `${m / 60}h`}</span>`).join('')}</div>`;
 }
@@ -1063,7 +1063,8 @@ function weekModal(ws) {
     <div class="row"><button class="icon-btn" data-act="m:prev" aria-label="Earlier week" ${hasPrev ? '' : 'disabled'}>‹</button>
       <div class="grow" style="text-align:center"><h3 style="margin:0">${label}</h3><div class="small muted">${shortDate(ws)} – ${shortDate(end)}</div></div>
       <button class="icon-btn" data-act="m:next" aria-label="Later week" ${ws < cur ? '' : 'disabled'}>›</button></div>
-    <div class="wk-head"><span class="q-medal ${m || 'none'}" aria-hidden="true">${medalArt(m, 52)}</span>
+    <div class="wk-head"><span class="wk-bd" aria-hidden="true">${ART.buddy({ m: w.gym / st.liftMax, j: w.jogMin / (st.jogMax * st.per), gold: m === 'gold', pose: pick([...LIFT_POSES, ...(w.jogMin ? RUN_POSES : [])]), size: 92 })}</span>
+      <span class="q-medal ${m || 'none'}" aria-hidden="true">${medalArt(m, 44)}</span>
       <div class="grow"><div class="q-score num"><b>${st.total}</b> / ${st.max} ★</div>
         <div class="small muted">${m ? `${MEDALS[m][1]} week` : 'No medal'}${m === 'gold' ? ' — every star earned!' : ''}</div></div></div>
     <div class="wk-tiles">
@@ -1118,6 +1119,7 @@ function weekCard() {
     <div class="row"><b class="grow">Weekly quest</b>
       <span class="pill num ip" title="${q.stars} stars all-time">${ART.star(18)} Lv ${q.level}</span>
       <span class="pill num ip ${q.streak ? 'streak' : ''}" title="Gold weeks in a row">${ART.flame(18)} ${q.streak}</span></div>
+    ${buddyBlock()}
     <div class="q-head">
       <div class="q-medal ${m || 'none'}" aria-hidden="true">${medalArt(m, 46)}</div>
       <div class="grow"><div class="q-score num"><b>${st.total}</b> / ${st.max} ★</div>
@@ -1163,7 +1165,7 @@ function showSurprise({ emoji, title, sub, big, grow }) {
     const sparks = Array.from({ length: big ? 0 : 12 }, (_, i) => `<span style="--a:${i * 30 + Math.round(Math.random() * 14)}deg">${pick(['✨', '⭐', '💥', '★'])}</span>`).join('');
     const fw = big ? Array.from({ length: 5 }, () => `<div class="fw" style="left:${10 + Math.random() * 80}%;top:${8 + Math.random() * 45}%;animation-delay:${(Math.random() * 0.9).toFixed(2)}s">${
       Array.from({ length: 14 }, (_, i) => `<i style="--a:${i * (360 / 14)}deg;background:${pick(['#fab219', '#0ca30c', '#2a78d6', '#eb6834', '#e0457b'])}"></i>`).join('')}</div>`).join('') : '';
-    const pic = grow ? ART.buddy({ m: grow.from, jog: grow.jog, gold: grow.gold, size: 190 }) : emoji.startsWith('<') ? emoji : ART[emoji] ? ART[emoji](big ? 120 : 100) : emoji;
+    const pic = grow ? ART.buddy({ m: grow.from.m, j: grow.from.j, gold: grow.gold, pose: grow.pose, size: 190 }) : emoji.startsWith('<') ? emoji : ART[emoji] ? ART[emoji](big ? 120 : 100) : emoji;
     el.innerHTML = `${fw}<div class="sp-card"><div class="sp-emoji">${pic}</div><div class="sp-burst" aria-hidden="true">${sparks}</div>
       <div class="sp-title">${title}</div>${sub ? `<div class="sp-sub">${sub}</div>` : ''}</div>`;
     document.body.appendChild(el);
@@ -1172,7 +1174,7 @@ function showSurprise({ emoji, title, sub, big, grow }) {
     let gone = false;
     const close = () => { if (gone) return; gone = true; el.classList.add('out'); setTimeout(() => { el.remove(); done(); }, 260); };
     el.addEventListener('click', close);
-    if (grow) setTimeout(() => { const bd = el.querySelector('.buddy'); ART.buddySet(bd, grow.to); el.querySelector('.sp-emoji').classList.add('r-flex'); }, 650);
+    if (grow) setTimeout(() => { const bd = el.querySelector('.buddy'); ART.buddySet(bd, grow.to.m, grow.to.j); el.querySelector('.sp-emoji').classList.add(grow.run ? 'r-jump' : 'r-flex'); }, 650);
     setTimeout(close, big ? 3400 : grow ? 2900 : 2100);
   });
 }
@@ -1189,16 +1191,23 @@ async function surpriseAfterLog(before, what) {
     if (!ev.length && a.m && a.m !== before.m) ev.push({ emoji: ART.medal(a.m, 100), title: `${MEDALS[a.m][1]} unlocked!`, sub: `${a.st.total}/${a.st.max} ★ this week` });
   }
   if (a.lv > before.lv) ev.push({ emoji: 'star', title: `Level ${a.lv}!`, sub: 'Level up — keep stacking stars' });
-  // a lifting session (own or with PT) → Buddy's muscles swell on screen
-  if (a.w.gym > before.w.gym) {
-    const grow = { from: before.w.gym / before.st.liftMax, to: a.w.gym / a.st.liftMax, jog: a.w.jogMin > 0, gold: a.m === 'gold' };
+  // a lifting session → Buddy's muscles swell; a jog → Buddy's legs and sneakers grow. New pose every time.
+  const lifted = a.w.gym > before.w.gym, ran = a.w.jogMin > before.w.jogMin;
+  if (lifted || ran) {
+    const lp = (x) => ({ m: x.w.gym / x.st.liftMax, j: x.w.jogMin / (x.st.jogMax * x.st.per) });
+    const grow = { from: lp(before), to: lp(a), gold: a.m === 'gold', run: !lifted, pose: nextPose(lifted ? LIFT_POSES : RUN_POSES) };
+    ui.cardPose = grow.pose; // the quest card keeps the pose from the celebration
     const head = ev[0];
     if (head && head.big) { head.grow = grow; head.emoji = ''; } else {
-      const done = a.w.gym >= a.st.liftMax;
-      ev.unshift({ grow, emoji: '', title: done && before.w.gym < a.st.liftMax ? 'MAX MUSCLE!' : pick(['Muscles grew!', 'Look at these guns!', 'Bicep upgrade!', 'Getting swole!', 'Pump unlocked!']),
-        sub: `Buddy’s muscle power ${a.w.gym}/${a.st.liftMax}${a.st.total > before.st.total ? ` · +${a.st.total - before.st.total} ${ART.star(20)}` : ''}` });
+      const toGoal = Math.max(0, Math.round(a.st.jogMax * a.st.per - a.w.jogMin));
+      ev.unshift(lifted ? {
+        grow, emoji: '', title: a.w.gym >= a.st.liftMax && before.w.gym < a.st.liftMax ? 'MAX MUSCLE!' : pick(['Muscles grew!', 'Look at these guns!', 'Bicep upgrade!', 'Getting swole!', 'Pump unlocked!']),
+        sub: `Buddy’s muscle power ${a.w.gym}/${a.st.liftMax}${a.st.total > before.st.total ? ` · +${a.st.total - before.st.total} ${ART.star(20)}` : ''}`,
+      } : {
+        grow, emoji: '', title: pick(['Legs leveled up!', 'Zoom zoom!', 'Speedy sneakers!', 'Calves of steel!', 'Running machine!']),
+        sub: `Buddy’s leg power ${a.w.jogMin}/${Math.round(a.st.jogMax * a.st.per)} min${a.st.total > before.st.total ? ` · +${a.st.total - before.st.total} ${ART.star(20)}` : toGoal ? ` · ${toGoal} min to go` : ''}`,
+      });
       if (ev.length > 2) ev.length = 2;
-      what = null;
     }
   }
   if (!ev.length) {
@@ -1371,30 +1380,38 @@ function weekStrip() {
   return `<div class="strip-h small">Days this week</div><div class="dstrip" role="img" aria-label="This week's training days">${days.join('')}</div>`;
 }
 // ---------------------------------------------------------------- Buddy, the mascot: muscles grow with this week's lifting sessions
-function buddyState() {
-  const g = db.goals, ws = weekStartOf(new Date()), w = weekStats(ws), st = weekStars(w, g);
-  return { w, st, m: w.gym / st.liftMax, jog: w.jogMin > 0, gold: medalOf(st) === 'gold' };
+function buddyState(ws = weekStartOf(new Date())) {
+  const g = db.goals, w = weekStats(ws), st = weekStars(w, g);
+  return { w, st, m: w.gym / st.liftMax, j: w.jogMin / (st.jogMax * st.per), gold: medalOf(st) === 'gold' };
+}
+const LIFT_POSES = ['flex', 'flexOne', 'victory', 'lift', 'wave'], RUN_POSES = ['run', 'run2'];
+/** A different pose from last time. */
+function nextPose(list) {
+  const opts = list.filter((p) => p !== ui.lastPose);
+  ui.lastPose = pick(opts.length ? opts : list);
+  return ui.lastPose;
 }
 function buddyLines(b) {
-  const left = b.st.liftMax - b.w.gym;
-  const base = b.w.gym === 0 ? ['New week, noodle arms! Let’s lift and pump me up', 'Feed me a lifting session and watch me grow', 'My arms are spaghetti right now…']
-    : left > 0 ? [`${plural(left, 'more lift')} and I’ll be fully swole!`, `Muscle power ${b.w.gym}/${b.st.liftMax}. Feel these guns!`, 'Ooh, I can feel the pump']
-    : ['MAXIMUM MUSCLE! Look at these biceps!', 'We’re so strong this week', 'Lifting goal done — flex with me!'];
-  if (b.jog) base.push('Love the headband? That’s from your jogging');
-  else base.push('A jog gets me my headband');
-  if (b.gold) base.push('Gold week! Check out my crown');
-  return base;
+  const left = b.st.liftMax - b.w.gym, jogGoal = Math.round(b.st.jogMax * b.st.per), jogLeft = Math.max(0, jogGoal - b.w.jogMin);
+  const out = [b.w.gym === 0 ? 'New week, noodle arms! Let’s lift and pump me up' : left > 0 ? `${plural(left, 'more lift')} and I’ll be fully swole!` : 'MAXIMUM MUSCLE! Look at these biceps!'];
+  out.push(b.w.jogMin === 0 ? 'Take me jogging and I get a headband and speedy sneakers' : jogLeft ? `${jogLeft} more jog minutes and my sneakers get wings!` : 'Winged sneakers unlocked! Zoom zoom');
+  out.push(b.w.gym ? `Muscle power ${b.w.gym}/${b.st.liftMax}. Feel these guns!` : 'My arms are spaghetti right now…');
+  out.push(b.w.jogMin ? `Leg power ${b.w.jogMin}/${jogGoal} min. Calves of steel!` : 'My legs are tiny… let’s go for a run');
+  if (b.gold) out.push('Gold week! Check out my crown');
+  return out;
 }
-function buddyCard() {
-  const b = buddyState();
-  const pips = Array.from({ length: Math.max(b.st.liftMax, b.w.gym) }, (_, i) => `<i class="${i < b.w.gym ? 'on' : ''}"></i>`).join('');
-  return `<section class="card buddy-card">
-    <button class="buddy-btn" data-act="buddy-tap" aria-label="Poke Buddy">${ART.buddy({ m: b.m, jog: b.jog, gold: b.gold, size: 168 })}</button>
+const pips = (n, max, cls = '') => `<span class="bd-pips ${cls}">${Array.from({ length: Math.max(max, n) }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
+/** Buddy at the top of the Weekly quest: arms grow with lifts, legs with jogging. */
+function buddyBlock() {
+  const b = buddyState(), hours = Math.min(b.st.jogMax, Math.floor(b.w.jogMin / b.st.per + 1e-9));
+  const pose = ui.cardPose || (ui.cardPose = pick([...LIFT_POSES, ...(b.w.jogMin ? RUN_POSES : [])]));
+  return `<div class="q-buddy">
+    <button class="buddy-btn" data-act="buddy-tap" aria-label="Poke Buddy">${ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose, size: 162 })}</button>
     <div class="bd-side">
-      <div class="bd-bubble" id="bd-say" aria-live="polite">${buddyLines(b)[0]}</div>
-      <div class="bd-meter"><span class="small muted">Muscle power</span><span class="bd-pips" role="img" aria-label="${b.w.gym} of ${b.st.liftMax} lifts">${pips}</span></div>
-      <div class="small faint">Tap Buddy · grows with every lift</div>
-    </div></section>`;
+      <div class="bd-bubble" id="bd-say" aria-live="polite">${buddyLines(b)[(ui.pokes || 0) % 2]}</div>
+      <div class="bd-meter" role="img" aria-label="Muscle power ${b.w.gym} of ${b.st.liftMax} lifts"><span class="il">${ART.lift(22)}</span>${pips(b.w.gym, b.st.liftMax)}</div>
+      <div class="bd-meter" role="img" aria-label="Leg power ${hours} of ${b.st.jogMax} jogging hours"><span class="il">${ART.jog(22)}</span>${pips(hours, b.st.jogMax, 'peach')}</div>
+    </div></div>`;
 }
 const POKE = ['r-flex', 'r-jump', 'r-wiggle', 'r-flex', 'r-spin'];
 function buddyPoke(btn) {
@@ -1403,6 +1420,9 @@ function buddyPoke(btn) {
   const say = $('#bd-say');
   const giggle = ui.pokes % 7 === 0;
   if (say) { say.textContent = giggle ? 'Hehe, that tickles!' : lines[ui.pokes % lines.length]; say.classList.remove('pop'); void say.offsetWidth; say.classList.add('pop'); }
+  // new pose on every poke
+  ui.cardPose = nextPose([...LIFT_POSES, ...(b.w.jogMin ? RUN_POSES : [])]);
+  btn.innerHTML = ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose: ui.cardPose, size: 162 });
   POKE.forEach((c) => btn.classList.remove(c)); void btn.offsetWidth;
   btn.classList.add(giggle ? 'r-wiggle' : POKE[ui.pokes % POKE.length]);
   try { if (navigator.vibrate) navigator.vibrate(15); } catch (e) { /* ignore */ }
@@ -1462,7 +1482,6 @@ function idleView() {
     body: `${weekStrip()}<div class="stack">
       ${notice}
       ${memUrgent(memInfo()) ? membershipCard() : ''}
-      ${buddyCard()}
       ${weekCard()}
       ${hero}
     </div>

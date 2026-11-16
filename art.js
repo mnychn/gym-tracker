@@ -1,19 +1,34 @@
 /* Gym Log — little hand-made illustrations (inline SVG), in the style of the app icon:
    soft white blob characters, lavender / peach / mint, rosy cheeks. window.ART.name(size) → SVG string. */
 (function () {
-  const INK = '#34304d', BL = '#ffab9d', L = '#9c92f6', LD = '#6c60ea', P = '#f7a259', PD = '#f0803f', M = '#5fcf8e', MD = '#2fae63', Y = '#ffcc4d', YD = '#f2a900', OUT = '#d6d0ff';
+  // retro mid-century palette: navy ink, cream, mustard, burnt orange, teal, sage
+  const INK = '#1d2b4a', BL = '#ef7a5a', L = '#2f8f8c', LD = '#1f6766', P = '#e8693f', PD = '#c94a2c', M = '#8db36b', MD = '#5f8a45', Y = '#f2b63c', YD = '#cf8f16', OUT = '#1d2b4a';
+  const CR = '#f7eedb', FUR = '#f2b63c', FUR2 = '#f9d98f';
+  /** Fuzzy outline: a squarish blob with little scalloped tufts all round. */
+  const fur = (cx, cy, rx, ryT, ryB, n, bump) => {
+    const e = (v) => Math.sign(v) * Math.pow(Math.abs(v), 0.78);
+    const pts = Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2 - Math.PI / 2, c = Math.cos(a), sn = Math.sin(a); return [cx + rx * e(c), cy + (sn < 0 ? ryT : ryB) * e(sn)]; });
+    let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+    pts.forEach((a0, i) => {
+      const a1 = pts[(i + 1) % n], mx = (a0[0] + a1[0]) / 2, my = (a0[1] + a1[1]) / 2, l = Math.hypot(mx - cx, my - cy) || 1;
+      d += ` Q${(mx + ((mx - cx) / l) * bump).toFixed(1)} ${(my + ((my - cy) / l) * bump).toFixed(1)} ${a1[0].toFixed(1)} ${a1[1].toFixed(1)}`;
+    });
+    return `${d} Z`;
+  };
   const face = (x, y, k = 1, mood = 'smile') => {
     const e = 2.3 * k, dx = 5.5 * k;
     const eyes = mood === 'sleep'
       ? `<path d="M${x - dx - 2.2 * k} ${y} q${2.2 * k} ${1.8 * k} ${4.4 * k} 0 M${x + dx - 2.2 * k} ${y} q${2.2 * k} ${1.8 * k} ${4.4 * k} 0" stroke="${INK}" stroke-width="${1.6 * k}" fill="none" stroke-linecap="round"/>`
-      : `<circle cx="${x - dx}" cy="${y}" r="${e}" fill="${INK}"/><circle cx="${x + dx}" cy="${y}" r="${e}" fill="${INK}"/><circle cx="${x - dx + 0.8 * k}" cy="${y - 0.9 * k}" r="${0.8 * k}" fill="#fff"/><circle cx="${x + dx + 0.8 * k}" cy="${y - 0.9 * k}" r="${0.8 * k}" fill="#fff"/>`;
+      : `<circle cx="${x - dx}" cy="${y}" r="${e}" fill="${INK}"/><circle cx="${x + dx}" cy="${y}" r="${e}" fill="${INK}"/><circle cx="${x - dx + 0.8 * k}" cy="${y - 0.9 * k}" r="${0.8 * k}" fill="${CR}"/><circle cx="${x + dx + 0.8 * k}" cy="${y - 0.9 * k}" r="${0.8 * k}" fill="${CR}"/>`;
     const mouth = mood === 'open'
       ? `<ellipse cx="${x}" cy="${y + 4.6 * k}" rx="${2.4 * k}" ry="${2 * k}" fill="${INK}"/>`
       : `<path d="M${x - 3 * k} ${y + 3.6 * k} Q${x} ${y + 6.6 * k} ${x + 3 * k} ${y + 3.6 * k}" stroke="${INK}" stroke-width="${1.7 * k}" fill="none" stroke-linecap="round"/>`;
     return `${eyes}<ellipse cx="${x - 10 * k}" cy="${y + 4 * k}" rx="${3.2 * k}" ry="${2 * k}" fill="${BL}" opacity=".85"/><ellipse cx="${x + 10 * k}" cy="${y + 4 * k}" rx="${3.2 * k}" ry="${2 * k}" fill="${BL}" opacity=".85"/>${mouth}`;
   };
-  const blob = (cx = 32, cy = 40, s = 1) => `<path d="M${cx} ${cy - 24 * s} C${cx + 16 * s} ${cy - 24 * s} ${cx + 24 * s} ${cy - 11 * s} ${cx + 24 * s} ${cy} C${cx + 24 * s} ${cy + 12 * s} ${cx + 14 * s} ${cy + 17 * s} ${cx} ${cy + 17 * s} C${cx - 14 * s} ${cy + 17 * s} ${cx - 24 * s} ${cy + 12 * s} ${cx - 24 * s} ${cy} C${cx - 24 * s} ${cy - 11 * s} ${cx - 16 * s} ${cy - 24 * s} ${cx} ${cy - 24 * s} Z" fill="#fff" stroke="${OUT}" stroke-width="2"/>`;
-  const arm = (d) => `<path d="${d}" stroke="${OUT}" stroke-width="7" stroke-linecap="round" fill="none"/><path d="${d}" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none"/>`;
+  const horn = (x, y, s, dir) => `<path d="M${x - 4.5 * s} ${y + 4 * s} C${x - 5 * s + dir * 1.5 * s} ${y - 7 * s} ${x + 5 * s + dir * 1.5 * s} ${y - 7 * s} ${x + 4.5 * s} ${y + 4 * s} Z" fill="${P}" stroke="${OUT}" stroke-width="${Math.min(3, 1.6 * Math.max(0.8, s))}" stroke-linejoin="round"/>
+    <ellipse cx="${x + dir * 0.6 * s}" cy="${y - 2.6 * s}" rx="${1.6 * s}" ry="${1 * s}" fill="${CR}" opacity=".7"/>`;
+  const blob = (cx = 32, cy = 40, s = 1) => `${horn(cx - 11 * s, cy - 23 * s, s, -1)}${horn(cx + 11 * s, cy - 23 * s, s, 1)}<path d="${fur(cx, cy, 24 * s, 24 * s, 17 * s, 20, 1.6 * s)}" fill="${FUR}" stroke="${OUT}" stroke-width="2" stroke-linejoin="round"/>`;
+  const arm = (d) => `<path d="${d}" stroke="${OUT}" stroke-width="7" stroke-linecap="round" fill="none"/><path d="${d}" stroke="${FUR}" stroke-width="4" stroke-linecap="round" fill="none"/>`;
   const sparkle = (x, y, r, c = '#fff') => `<path d="M${x} ${y - r} L${x + r * 0.28} ${y - r * 0.28} L${x + r} ${y} L${x + r * 0.28} ${y + r * 0.28} L${x} ${y + r} L${x - r * 0.28} ${y + r * 0.28} L${x - r} ${y} L${x - r * 0.28} ${y - r * 0.28} Z" fill="${c}"/>`;
   const svg = (inner, size, label) => `<svg class="art" width="${size}" height="${size}" viewBox="0 0 64 64" ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'}>${inner}</svg>`;
 
@@ -27,11 +42,11 @@
     dance: (s = 40) => svg(`<path d="M50 6v14" stroke="${LD}" stroke-width="3" stroke-linecap="round"/><ellipse cx="46.5" cy="20.5" rx="4.5" ry="3.5" fill="${LD}"/><path d="M50 6l7 3" stroke="${LD}" stroke-width="3" stroke-linecap="round"/>
       ${arm('M12 38 L5 26')}${arm('M50 40 L58 36')}${blob(31, 40, 0.84)}<path d="M23 18 l-6 -6 0 9z M23 18 l6 -6 0 9z" fill="${P}"/><circle cx="23" cy="16.5" r="2.4" fill="${PD}"/>${face(31, 41, 0.85)}`, s),
     watch: (s = 40) => svg(`<rect x="22" y="2" width="20" height="14" rx="5" fill="${L}"/><rect x="22" y="48" width="20" height="14" rx="5" fill="${L}"/>
-      <rect x="11" y="11" width="42" height="42" rx="13" fill="${INK}"/><rect x="15" y="15" width="34" height="34" rx="10" fill="#fff"/><rect x="53" y="26" width="4" height="10" rx="2" fill="${LD}"/>${face(32, 30, 0.9)}`, s),
-    calendar: (s = 40) => svg(`<rect x="6" y="10" width="52" height="48" rx="13" fill="#fff" stroke="${OUT}" stroke-width="2"/><path d="M6 23 V22 a12 12 0 0 1 12 -12 h28 a12 12 0 0 1 12 12 v1z" fill="${L}"/>
+      <rect x="11" y="11" width="42" height="42" rx="13" fill="${INK}"/><rect x="15" y="15" width="34" height="34" rx="10" fill="${CR}"/><rect x="53" y="26" width="4" height="10" rx="2" fill="${LD}"/>${face(32, 30, 0.9)}`, s),
+    calendar: (s = 40) => svg(`<rect x="6" y="10" width="52" height="48" rx="13" fill="${CR}" stroke="${OUT}" stroke-width="2"/><path d="M6 23 V22 a12 12 0 0 1 12 -12 h28 a12 12 0 0 1 12 12 v1z" fill="${L}"/>
       <rect x="18" y="4" width="5" height="12" rx="2.5" fill="${LD}"/><rect x="41" y="4" width="5" height="12" rx="2.5" fill="${LD}"/>
       <path d="M32 51 s-10 -6 -10 -12.5 a5.2 5.2 0 0 1 10 -2.2 a5.2 5.2 0 0 1 10 2.2 c0 6.5 -10 12.5 -10 12.5z" fill="${P}"/>`, s),
-    scan: (s = 40) => svg(`<rect x="13" y="3" width="38" height="58" rx="11" fill="${L}"/><rect x="17" y="9" width="30" height="46" rx="7" fill="#fff"/>
+    scan: (s = 40) => svg(`<rect x="13" y="3" width="38" height="58" rx="11" fill="${L}"/><rect x="17" y="9" width="30" height="46" rx="7" fill="${CR}"/>
       <rect x="22" y="38" width="5" height="10" rx="2.5" fill="${P}"/><rect x="29.5" y="32" width="5" height="16" rx="2.5" fill="${M}"/><rect x="37" y="35" width="5" height="13" rx="2.5" fill="${LD}"/>${face(32, 19, 0.75)}`, s),
     medal: (kind = 'gold', s = 40) => {
       const c = { gold: [Y, YD], silver: ['#e3e6ef', '#aeb5c6'], bronze: ['#f5b07d', '#cf7f45'] }[kind] || [Y, YD];
@@ -42,32 +57,32 @@
     flame: (s = 40) => svg(`<path d="M32 3 C36 14 52 20 52 38 C52 51 43 60 32 60 C21 60 12 51 12 38 C12 27 19 22 22 14 C25 22 28 24 30 24 C30 16 29 9 32 3 Z" fill="${PD}"/>
       <path d="M32 22 C36 30 45 33 45 44 C45 52 39 57 32 57 C25 57 19 52 19 44 C19 37 24 34 27 29 C29 33 30 34 32 22 Z" fill="${Y}"/>${face(32, 44, 0.75)}`, s),
     star: (s = 40) => svg(`<path d="M32 4 C34 4 35 5 36 7 L41 18 L53 19.5 C57 20 58 23 55.5 25.5 L46.5 34 L49 46 C49.8 50 47 52 43.5 50 L32 44 L20.5 50 C17 52 14.2 50 15 46 L17.5 34 L8.5 25.5 C6 23 7 20 11 19.5 L23 18 L28 7 C29 5 30 4 32 4 Z" fill="${Y}" stroke="${YD}" stroke-width="2" stroke-linejoin="round"/>${face(32, 28, 0.8)}`, s),
-    target: (s = 40) => svg(`<circle cx="30" cy="34" r="25" fill="${P}"/><circle cx="30" cy="34" r="18" fill="#fff"/><circle cx="30" cy="34" r="11" fill="${P}"/>
+    target: (s = 40) => svg(`<circle cx="30" cy="34" r="25" fill="${P}"/><circle cx="30" cy="34" r="18" fill="${CR}"/><circle cx="30" cy="34" r="11" fill="${P}"/>
       <path d="M30 34 L54 10" stroke="${LD}" stroke-width="3.5" stroke-linecap="round"/><path d="M50 6 l8 0 0 8 -6 -2z" fill="${L}"/>${face(30, 32, 0.6)}`, s),
     pie: (s = 40) => svg(`<circle cx="32" cy="32" r="26" fill="#2a78d6"/><path d="M32 32 L32 6 A26 26 0 0 1 56.7 40 Z" fill="#1baf7a"/><path d="M32 32 L56.7 40 A26 26 0 0 1 40 56.7 Z" fill="#eb6834"/>
-      <circle cx="32" cy="32" r="15" fill="#fff"/>${face(32, 30, 0.7)}`, s),
+      <circle cx="32" cy="32" r="15" fill="${CR}"/>${face(32, 30, 0.7)}`, s),
     flex: (s = 40) => svg(`${arm('M47 46 L56 36')}${blob(29, 40, 0.84)}
       <rect x="53.5" y="20" width="4.5" height="20" rx="2.2" fill="${LD}"/><rect x="49" y="15" width="13.5" height="7" rx="3.5" fill="${L}"/><rect x="49" y="38" width="13.5" height="7" rx="3.5" fill="${L}"/>
       <rect x="11" y="19" width="36" height="5.5" rx="2.7" fill="${M}"/>${sparkle(10, 10, 5, Y)}${face(29, 41, 0.85)}`, s),
     heart: (s = 40) => svg(`<path d="M32 57 C32 57 6 42 6 23 C6 13 13 7 21 7 C26 7 30 10 32 14 C34 10 38 7 43 7 C51 7 58 13 58 23 C58 42 32 57 32 57 Z" fill="#ff8fa3"/>
-      <ellipse cx="19" cy="18" rx="5" ry="3" fill="#fff" opacity=".55" transform="rotate(-30 19 18)"/>${face(32, 28, 0.85)}`, s),
-    scale: (s = 40) => svg(`<rect x="6" y="14" width="52" height="44" rx="15" fill="${L}"/><circle cx="32" cy="33" r="15" fill="#fff"/><path d="M32 33 L39 25" stroke="${PD}" stroke-width="3" stroke-linecap="round"/>
+      <ellipse cx="19" cy="18" rx="5" ry="3" fill="${CR}" opacity=".55" transform="rotate(-30 19 18)"/>${face(32, 28, 0.85)}`, s),
+    scale: (s = 40) => svg(`<rect x="6" y="14" width="52" height="44" rx="15" fill="${L}"/><circle cx="32" cy="33" r="15" fill="${CR}"/><path d="M32 33 L39 25" stroke="${PD}" stroke-width="3" stroke-linecap="round"/>
       ${face(32, 38, 0.6)}<rect x="12" y="52" width="10" height="5" rx="2.5" fill="${LD}"/><rect x="42" y="52" width="10" height="5" rx="2.5" fill="${LD}"/>`, s),
-    drop: (s = 40) => svg(`<path d="M32 4 C40 18 52 28 52 41 C52 52 43 60 32 60 C21 60 12 52 12 41 C12 28 24 18 32 4 Z" fill="${Y}"/><ellipse cx="23" cy="36" rx="3" ry="6" fill="#fff" opacity=".6"/>${face(32, 40, 0.85)}`, s),
+    drop: (s = 40) => svg(`<path d="M32 4 C40 18 52 28 52 41 C52 52 43 60 32 60 C21 60 12 52 12 41 C12 28 24 18 32 4 Z" fill="${Y}"/><ellipse cx="23" cy="36" rx="3" ry="6" fill="${CR}" opacity=".6"/>${face(32, 40, 0.85)}`, s),
     sprout: (s = 40) => svg(`<path d="M32 30 C32 22 30 16 32 10" stroke="${MD}" stroke-width="3" stroke-linecap="round" fill="none"/>
       <path d="M32 16 C24 4 10 10 12 16 C18 22 28 20 32 16 Z" fill="${M}"/><path d="M32 14 C40 2 54 8 52 14 C46 20 36 18 32 14 Z" fill="${MD}"/>
       <path d="M12 30 h40 l-5 26 a6 6 0 0 1 -6 5 h-18 a6 6 0 0 1 -6 -5z" fill="${P}"/>${face(32, 42, 0.75)}`, s),
-    chart: (s = 40) => svg(`<rect x="4" y="8" width="56" height="48" rx="14" fill="#fff" stroke="${OUT}" stroke-width="2"/>
+    chart: (s = 40) => svg(`<rect x="4" y="8" width="56" height="48" rx="14" fill="${CR}" stroke="${OUT}" stroke-width="2"/>
       <path d="M13 44 L24 34 L33 39 L49 20" stroke="${LD}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="49" cy="20" r="5" fill="${P}"/>${sparkle(52, 9, 5, Y)}`, s),
     tape: (s = 40) => svg(`<path d="M44 44 h16 v10 h-16z" fill="${Y}"/><path d="M48 44v4M52 44v6M56 44v4" stroke="${YD}" stroke-width="1.5"/>
-      <circle cx="28" cy="34" r="24" fill="${M}"/><circle cx="28" cy="34" r="18" fill="#fff"/>${face(28, 32, 0.8)}`, s),
+      <circle cx="28" cy="34" r="24" fill="${M}"/><circle cx="28" cy="34" r="18" fill="${CR}"/>${face(28, 32, 0.8)}`, s),
     avocado: (s = 40) => svg(`<path d="M32 3 C42 3 46 14 50 24 C55 36 54 60 32 60 C10 60 9 36 14 24 C18 14 22 3 32 3 Z" fill="#5c9e3c"/>
       <path d="M32 9 C40 9 43 18 46 26 C50 36 49 55 32 55 C15 55 14 36 18 26 C21 18 24 9 32 9 Z" fill="#d6ef8f"/><circle cx="32" cy="41" r="9" fill="#a8693c"/>${face(32, 24, 0.75)}`, s),
     trophy: (s = 40) => svg(`<path d="M16 10 C6 10 6 26 18 28" stroke="${YD}" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M48 10 C58 10 58 26 46 28" stroke="${YD}" stroke-width="4" fill="none" stroke-linecap="round"/>
       <path d="M14 6 h36 v14 c0 12 -8 20 -18 20 s-18 -8 -18 -20z" fill="${Y}"/><rect x="28" y="38" width="8" height="10" fill="${YD}"/><rect x="18" y="48" width="28" height="10" rx="4" fill="${L}"/>
       ${face(32, 19, 0.85)}${sparkle(55, 40, 5, Y)}${sparkle(8, 40, 4, Y)}`, s),
     flag: (s = 40) => svg(`<rect x="12" y="4" width="4" height="58" rx="2" fill="${INK}"/><path d="M16 7 h34 l-6 11 6 11 h-34z" fill="${P}"/>
-      <path d="M16 7h8v7h-8zM32 7h8v7h-8zM24 14h8v8h-8zM40 14h6l-2 4 2 4h-6zM16 22h8v7h-8zM32 22h8v7h-8z" fill="#fff" opacity=".9"/>`, s),
+      <path d="M16 7h8v7h-8zM32 7h8v7h-8zM24 14h8v8h-8zM40 14h6l-2 4 2 4h-6zM16 22h8v7h-8zM32 22h8v7h-8z" fill="${CR}" opacity=".9"/>`, s),
     wave: (s = 40) => svg(`${arm('M50 34 L58 18')}${blob(30, 40, 0.84)}${face(30, 41, 0.85)}<path d="M57 9 q4 3 3 8 M61 7 q4 4 2 10" stroke="${L}" stroke-width="2" fill="none" stroke-linecap="round"/>`, s),
   };
 
@@ -103,11 +118,11 @@
       const hl = len * 0.36, R = 21;
       return `<g class="bd-armg ${side}">
         <path class="bd-arm o" d="${d}" stroke="${OUT}" style="stroke-width:${st.w + 4}px" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-        <path class="bd-arm" d="${d}" stroke="#fff" style="stroke-width:${st.w}px" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path class="bd-arm" d="${d}" stroke="${FUR}" style="stroke-width:${st.w}px" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
         <g transform="translate(${mx} ${my}) rotate(${ang.toFixed(1)})"><g class="bd-bi" style="transform:scale(${st.b})">
-          <path d="M${-hl} 1 A${hl} ${R} 0 0 1 ${hl} 1 Z" fill="#fff"/><path d="M${-hl} 1 A${hl} ${R} 0 0 1 ${hl} 1" stroke="${OUT}" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+          <path d="M${-hl} 1 A${hl} ${R} 0 0 1 ${hl} 1 Z" fill="${FUR}"/><path d="M${-hl} 1 A${hl} ${R} 0 0 1 ${hl} 1" stroke="${OUT}" stroke-width="2.6" fill="none" stroke-linecap="round"/>
           <path d="M${-hl * 0.2} -12 q4 -3 8 -1" stroke="${OUT}" stroke-width="2" fill="none" stroke-linecap="round" opacity=".8"/></g></g>
-        <circle class="bd-fist" cx="${H[0]}" cy="${H[1]}" r="11" fill="#fff" stroke="${OUT}" stroke-width="2.5" style="transform:scale(${st.f})"/>
+        <circle class="bd-fist" cx="${H[0]}" cy="${H[1]}" r="11" fill="${FUR}" stroke="${OUT}" stroke-width="2.5" style="transform:scale(${st.f})"/>
       </g>`;
     };
     // legs: standing, or mid-stride when running
@@ -117,19 +132,21 @@
       : [[[94, 164], [86, 188], -1], [[126, 164], [134, 188], 1]];
     const legSvg = legs.map(([h, f, dir]) => `<g class="bd-leg">
         <path class="bd-lg o" d="M${pt(h)} L${pt(f)}" stroke="${OUT}" style="stroke-width:${st.lw + 4}px" stroke-linecap="round"/>
-        <path class="bd-lg" d="M${pt(h)} L${pt(f)}" stroke="#fff" style="stroke-width:${st.lw}px" stroke-linecap="round"/>
-        <g class="bd-shoe" style="transform:scale(${st.sn})"><ellipse cx="${f[0] + dir * 6}" cy="${f[1] + 2}" rx="15" ry="8.5" fill="${dir < 0 ? P : PD}"/>
-          <path d="M${f[0] + dir * 6 - 9} ${f[1] + 6} h18" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
-          <path class="bd-wing" d="M${f[0] - dir * 8} ${f[1] - 2} q${-dir * 14} -12 ${-dir * 20} -4 q${dir * 6} 2 ${dir * 4} 6 q${-dir * 8} 0 ${-dir * 12} 4 q${dir * 10} 4 ${dir * 16} 0z" fill="#fff" stroke="${OUT}" stroke-width="2" style="opacity:${q >= 1 ? 1 : 0}"/></g></g>`).join('');
+        <path class="bd-lg" d="M${pt(h)} L${pt(f)}" stroke="${FUR}" style="stroke-width:${st.lw}px" stroke-linecap="round"/>
+        <g class="bd-shoe" style="transform:scale(${st.sn})"><ellipse cx="${f[0] + dir * 6}" cy="${f[1] + 2}" rx="15" ry="8.5" fill="${dir < 0 ? L : LD}" stroke="${OUT}" stroke-width="2"/>
+          <path d="M${f[0] + dir * 6 - 9} ${f[1] + 6} h18" stroke="${CR}" stroke-width="2.5" stroke-linecap="round"/>
+          <path class="bd-wing" d="M${f[0] - dir * 8} ${f[1] - 2} q${-dir * 14} -12 ${-dir * 20} -4 q${dir * 6} 2 ${dir * 4} 6 q${-dir * 8} 0 ${-dir * 12} 4 q${dir * 10} 4 ${dir * 16} 0z" fill="${CR}" stroke="${OUT}" stroke-width="2" style="opacity:${q >= 1 ? 1 : 0}"/></g></g>`).join('');
     const speed = run ? `<g class="bd-speed">${[0, 1, 2].map((i) => `<path d="M${run > 0 ? 8 - i * 4 : 212 + i * 4} ${104 + i * 16} h${run > 0 ? 26 : -26}" stroke="${L}" stroke-width="4" stroke-linecap="round" style="opacity:${q > i * 0.4 ? 1 : 0}"/>`).join('')}</g>` : '';
-    const brows = `<path class="bd-brows" d="M88 102 l10 3 M132 102 l-10 3" stroke="${INK}" stroke-width="3" stroke-linecap="round" style="opacity:${Math.max(k, q) < 0.34 ? 1 : 0}"/>`;
+    const brows = `<path class="bd-brows" d="M84 92 l12 4 M136 92 l-12 4" stroke="${INK}" stroke-width="3" stroke-linecap="round" style="opacity:${Math.max(k, q) < 0.34 ? 1 : 0}"/>`;
     const happy = Math.max(k, q) >= 1;
-    const mouth = `<g class="bd-grin" style="opacity:${happy ? 1 : 0}"><path d="M100 128 Q110 142 120 128 Z" fill="${INK}"/><path d="M104 134 Q110 139 116 134" stroke="#ff8fa3" stroke-width="3" fill="none" stroke-linecap="round"/></g>
-      <path class="bd-smile" d="M102 128 Q110 136 118 128" stroke="${INK}" stroke-width="3.4" fill="none" stroke-linecap="round" style="opacity:${happy ? 0 : 1}"/>`;
-    const tails = run < 0 ? 'M54 88 l-18 -8 M54 92 l-17 6' : 'M166 88 l18 -8 M166 92 l17 6';
-    const band = `<g class="bd-band" style="opacity:${q > 0 ? 1 : 0}"><g clip-path="url(#bd-clip)"><rect x="40" y="84" width="140" height="11" fill="${P}"/></g><path d="${tails}" stroke="${P}" stroke-width="5" stroke-linecap="round"/></g>
+    const mouth = `<g class="bd-grin" style="opacity:${happy ? 1 : 0}"><path d="M92 128 Q110 154 128 128 Z" fill="${INK}"/><path d="M101 143 Q110 138 119 143 Q110 150 101 143Z" fill="${BL}"/>
+        <path d="M97 128 l3 6 3 -6z M117 128 l3 6 3 -6z" fill="${CR}"/></g>
+      <g class="bd-smile" style="opacity:${happy ? 0 : 1}"><path d="M94 129 Q110 141 126 129" stroke="${INK}" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+        <path d="M100 132.5 l2.5 5 2.5 -4z M115 133.5 l2.5 4 2.5 -5z" fill="${CR}" stroke="${INK}" stroke-width="1.4" stroke-linejoin="round"/></g>`;
+    const tails = run < 0 ? 'M56 82 l-18 -8 M56 86 l-17 6' : 'M164 82 l18 -8 M164 86 l17 6';
+    const band = `<g class="bd-band" style="opacity:${q > 0 ? 1 : 0}"><g clip-path="url(#bd-clip)"><rect x="40" y="78" width="140" height="11" fill="${L}"/></g><path d="${tails}" stroke="${L}" stroke-width="5" stroke-linecap="round"/></g>
       <path class="bd-sweat" d="M156 104 q4 7 0 10 q-4 -3 0 -10z" fill="#9fd8ff" style="opacity:${q >= 0.5 ? 1 : 0}"/>`;
-    const crown = gold ? `<path d="M88 70 l-3 -22 14 12 11 -18 11 18 14 -12 -3 22 z" fill="${Y}" stroke="${YD}" stroke-width="2.5" stroke-linejoin="round"/><circle cx="110" cy="56" r="3" fill="#fff"/>${sparkle(190, 40, 8, Y)}${sparkle(28, 40, 6, Y)}` : '';
+    const crown = gold ? `<path d="M88 70 l-3 -22 14 12 11 -18 11 18 14 -12 -3 22 z" fill="${P}" stroke="${OUT}" stroke-width="2.5" stroke-linejoin="round"/><circle cx="110" cy="56" r="3" fill="${CR}"/>${sparkle(190, 40, 8, Y)}${sparkle(28, 40, 6, Y)}` : '';
     const bar = P0.bar ? (() => { const [a, b] = [arms.l[2], arms.r[2]]; return `<rect x="${a[0] - 14}" y="${a[1] - 3}" width="${b[0] - a[0] + 28}" height="6" rx="3" fill="${LD}"/>
       <rect x="${a[0] - 24}" y="${a[1] - 15}" width="11" height="30" rx="4" fill="${L}"/><rect x="${b[0] + 13}" y="${b[1] - 15}" width="11" height="30" rx="4" fill="${L}"/>`; })() : '';
     const wave = P0.wave ? `<path d="M206 52 q6 4 4 12 M214 46 q7 6 4 16" stroke="${L}" stroke-width="3" fill="none" stroke-linecap="round"/>` : '';
@@ -139,16 +156,19 @@
       <ellipse class="bd-shadow" cx="110" cy="196" rx="56" ry="7" fill="${INK}" opacity=".12"/>
       ${speed}
       <g class="bd-all"><g${lean}>${legSvg}${arm('l', arms.l)}${arm('r', arms.r)}
-        <path d="${BODY}" fill="#fff" stroke="${OUT}" stroke-width="3"/>
-        <ellipse cx="86" cy="86" rx="10" ry="6" fill="#fff" opacity=".9" transform="rotate(-30 86 86)"/>
+        ${horn(84, 66, 2.6, -1)}${horn(136, 66, 2.6, 1)}
+        <path d="${BODY}" fill="${FUR}" stroke="${OUT}" stroke-width="3" stroke-linejoin="round"/>
+        <path d="${fur(110, 150, 30, 16, 14, 14, 2)}" fill="${FUR2}"/>
+        <g fill="${YD}" opacity=".55"><circle cx="72" cy="104" r="3"/><circle cx="66" cy="114" r="2"/><circle cx="150" cy="100" r="2.6"/><circle cx="155" cy="111" r="1.8"/></g>
         ${band}${crown}${brows}
-        <g class="bd-eyes"><circle cx="96" cy="114" r="6.5" fill="${INK}"/><circle cx="124" cy="114" r="6.5" fill="${INK}"/>
-          <circle cx="98.4" cy="111.6" r="2.2" fill="#fff"/><circle cx="126.4" cy="111.6" r="2.2" fill="#fff"/></g>
-        <ellipse cx="80" cy="126" rx="9" ry="5.5" fill="${BL}" opacity=".85"/><ellipse cx="140" cy="126" rx="9" ry="5.5" fill="${BL}" opacity=".85"/>
+        <g class="bd-eyes"><circle cx="94" cy="110" r="13" fill="${CR}" stroke="${INK}" stroke-width="2.6"/><circle cx="126" cy="110" r="13" fill="${CR}" stroke="${INK}" stroke-width="2.6"/>
+          <circle cx="97" cy="112" r="6.5" fill="${INK}"/><circle cx="123" cy="112" r="6.5" fill="${INK}"/>
+          <circle cx="99.4" cy="109.6" r="2.2" fill="${CR}"/><circle cx="125.4" cy="109.6" r="2.2" fill="${CR}"/></g>
+        <ellipse cx="74" cy="128" rx="8" ry="5" fill="${BL}" opacity=".8"/><ellipse cx="146" cy="128" rx="8" ry="5" fill="${BL}" opacity=".8"/>
         ${mouth}${bar}${wave}
       </g></g></svg>`;
   };
-  const BODY = 'M110 66 C150 66 170 98 170 128 C170 158 146 172 110 172 C74 172 50 158 50 128 C50 98 70 66 110 66 Z';
+  const BODY = fur(110, 122, 60, 56, 49, 34, 4.2);
   /** Animate an existing Buddy to new muscle / leg power (CSS transitions do the swelling). */
   A.buddySet = (el, m, j) => {
     if (!el) return; const st = bStyle(m, j);

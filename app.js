@@ -1888,7 +1888,7 @@ function bodyHero(s) {
       <div class="b-msg">${msg}</div>
       <div class="b-counts"><span class="b-c good"><b class="num">${good}</b> optimal</span><span class="b-c warn"><b class="num">${work}</b> to work on</span></div>
       <span class="b-next il">${ART.calendar(20)}Next scan ${nextScanText(s)}</span></div>
-    ${blobFace(mood)}
+    ${(() => { const b = buddyState(); return ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose: mood === 'happy' ? pick(['victory', 'wave', 'flexOne']) : pick(['flex', 'lift']), size: 124 }); })()}
   </section>`;
 }
 function bodyView() {

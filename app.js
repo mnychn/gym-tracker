@@ -770,6 +770,40 @@ function quickLogModal(kind) {
     },
   });
 }
+// ---------------------------------------------------------------- quick log: PT session (PT picks the exercises, so just note the focus)
+const PT_FOCUS = ['Upper body', 'Lower body', 'Chest', 'Back', 'Shoulders', 'Arms', 'Glutes & legs', 'Core', 'Full body', 'Cardio / HIIT'];
+function ptLogModal() {
+  const today = new Date();
+  const dv = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  const picked = new Set();
+  const mi = memInfo();
+  openModal(`
+    <div class="row"><h3 class="grow">Log a PT session</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
+    <p class="small muted">What did you work on? Pick one or more.</p>
+    <div class="fchips" role="group" aria-label="Workout focus">${PT_FOCUS.map((f) => `<button class="fchip" data-act="m:pick" data-f="${esc(f)}" aria-pressed="false">${esc(f)}</button>`).join('')}</div>
+    <div class="row" style="margin-top:14px">
+      <div class="grow"><label class="lbl">Date</label><input type="date" class="field" id="pt-date" value="${dv}" max="${dv}"></div>
+      <div style="width:110px"><label class="lbl">Minutes</label><input class="field" id="pt-min" inputmode="numeric" value="60"></div>
+    </div>
+    <p class="small muted" style="margin-top:10px">Counts as a weight-lifting session${mi && mi.ptTotal ? ` and uses 1 from your PT pack (${mi.ptLeft} left)` : ''}.</p>
+    <div class="actions"><button class="btn" data-act="m:close">Cancel</button><button class="btn primary" data-act="m:save">Log PT session</button></div>`,
+  {
+    close: closeModal,
+    pick: (el) => { const f = el.dataset.f; if (picked.has(f)) picked.delete(f); else picked.add(f); el.setAttribute('aria-pressed', String(picked.has(f))); },
+    save: () => {
+      if (!picked.size) { toast('Pick what you worked on'); return; }
+      const min = toNum($('#pt-min').value) || 60;
+      const [y, m, d] = ($('#pt-date').value || dv).split('-').map(Number);
+      const isToday = y === today.getFullYear() && m === today.getMonth() + 1 && d === today.getDate();
+      const when = isToday ? new Date(Date.now() - min * 60000) : new Date(y, m - 1, d, 12);
+      const focus = PT_FOCUS.filter((f) => picked.has(f));
+      const before = questSnap();
+      db.sessions.push({ id: uid(), dayId: null, dayName: `PT · ${focus.join(', ')}`, focus, kind: 'pt', date: localISO(when), duration: Math.round(min * 60000), entries: [] });
+      save(); closeModal(); surpriseAfterLog(before, 'pt'); renderView();
+    },
+  });
+}
+
 // ---------------------------------------------------------------- Apple Watch (via an Apple Shortcuts automation + clipboard)
 // A Shortcut runs when a watch workout ends and copies text like:
 //   GYMLOG / type: Running / start: 2026-11-13T07:05:00+08:00 / end: … / duration: 50 min / distance: 6.2 km / energy: 410 kcal / heart rate: 148
@@ -1001,9 +1035,51 @@ function jogRoad(w, st) {
 /** Last 6 weeks as a medal shelf. */
 function medalShelf(ws, g) {
   const weeks = [6, 5, 4, 3, 2, 1].map((i) => { const s = ws - i * 7 * 864e5, w = weekStats(s), st = weekStars(w, g); return { s, w, st, m: medalOf(st) }; });
-  return `<div class="shelf">${weeks.map((x) => `<div class="shelf-c" title="Week of ${shortDate(x.s)}: ${x.w.gym} lifts, ${x.w.jogMin} min jog — ${x.st.total}/${x.st.max} stars">
+  return `<div class="shelf">${weeks.map((x) => `<button class="shelf-c" data-act="week-detail" data-ws="${x.s}" aria-label="Week of ${shortDate(x.s)}: ${x.w.gym} lifts, ${x.w.jogMin} min jog, ${x.st.total} of ${x.st.max} stars. Show details">
       <span class="shelf-m ${x.m ? '' : 'none'}">${medalArt(x.m, 34)}</span>
-      <span class="shelf-n num">${x.st.total}★</span><span class="shelf-d">${shortDate(x.s)}</span></div>`).join('')}</div>`;
+      <span class="shelf-n num">${x.st.total}★</span><span class="shelf-d">${shortDate(x.s)}</span></button>`).join('')}</div>`;
+}
+/** One week in detail: medal, goals and every workout day by day. Arrows step through earlier weeks. */
+function weekModal(ws) {
+  const g = db.goals, cur = weekStartOf(new Date());
+  ws = weekStartOf(new Date(Math.min(ws, cur) + 12 * 36e5)); // snap (DST-safe)
+  const w = weekStats(ws), st = weekStars(w, g), m = medalOf(st);
+  const first = db.sessions.reduce((a, x) => Math.min(a, new Date(x.date).getTime()), Infinity);
+  const hasPrev = isFinite(first) && ws - 7 * 864e5 >= weekStartOf(new Date(first)) - 1;
+  const end = ws + 6 * 864e5;
+  const label = ws === cur ? 'This week' : ws === weekStartOf(new Date(Date.now() - 7 * 864e5)) ? 'Last week' : `Week of ${shortDate(ws)}`;
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const t = ws + i * 864e5;
+    const ss = db.sessions.filter((x) => dayStart(new Date(x.date)) === dayStart(new Date(t + 12 * 36e5))).sort((a, b) => (a.date < b.date ? -1 : 1));
+    return { t, ss };
+  });
+  const row = (s) => {
+    const k = kindOf(s), jm = Math.round(jogSecs(s) / 60);
+    const art = k === 'pt' ? ART.flex(28) : k === 'class' ? ART.dance(28) : k === 'cardio' || jm ? ART.jog(28) : ART.lift(28);
+    const bits = [k === 'pt' ? 'PT' : k === 'self' ? 'Own' : k === 'class' ? 'Class' : '', jm ? `${jm} min jog` : s.duration ? fmtDur(s.duration) : '', s.distance ? `${s.distance} km` : ''].filter(Boolean);
+    return `<button class="wk-s" data-act="m:open" data-id="${s.id}"><span class="wk-a">${art}</span><span class="grow"><b>${esc(s.dayName || 'Workout')}</b><span class="small muted">${bits.join(' · ')}</span></span><span class="chev faint">${ICON.chev}</span></button>`;
+  };
+  openModal(`
+    <div class="row"><button class="icon-btn" data-act="m:prev" aria-label="Earlier week" ${hasPrev ? '' : 'disabled'}>‹</button>
+      <div class="grow" style="text-align:center"><h3 style="margin:0">${label}</h3><div class="small muted">${shortDate(ws)} – ${shortDate(end)}</div></div>
+      <button class="icon-btn" data-act="m:next" aria-label="Later week" ${ws < cur ? '' : 'disabled'}>›</button></div>
+    <div class="wk-head"><span class="q-medal ${m || 'none'}" aria-hidden="true">${medalArt(m, 52)}</span>
+      <div class="grow"><div class="q-score num"><b>${st.total}</b> / ${st.max} ★</div>
+        <div class="small muted">${m ? `${MEDALS[m][1]} week` : 'No medal'}${m === 'gold' ? ' — every star earned!' : ''}</div></div></div>
+    <div class="wk-tiles">
+      <div class="wk-t tile-lav"><span class="il">${ART.lift(26)}</span><b class="num">${w.gym}<small> / ${g.sessions}</small></b><span class="small muted">lifts${w.pt ? ` · ${w.pt} with PT` : ''}</span></div>
+      <div class="wk-t tile-peach"><span class="il">${ART.jog(26)}</span><b class="num">${w.jogMin}<small> / ${g.jogMin}</small></b><span class="small muted">min jogging</span></div>
+      <div class="wk-t tile-mint"><span class="il">${ART.dance(26)}</span><b class="num">${w.classes}</b><span class="small muted">${w.classes === 1 ? 'class' : 'classes'}</span></div>
+    </div>
+    <div class="wk-days">${days.map((d) => `<div class="wk-d ${d.ss.length ? 'on' : ''}"><div class="wk-dl">${new Date(d.t).toLocaleDateString(undefined, { weekday: 'short' })}<span class="num">${new Date(d.t).getDate()}</span></div>
+      <div class="grow">${d.ss.length ? d.ss.map(row).join('') : `<span class="small faint">${d.t > Date.now() ? '—' : 'Rest'}</span>`}</div></div>`).join('')}</div>
+    <div class="actions"><button class="btn primary" data-act="m:close">Done</button></div>`,
+  {
+    close: closeModal,
+    prev: () => weekModal(ws - 7 * 864e5),
+    next: () => weekModal(ws + 7 * 864e5),
+    open: (el) => { const s = db.sessions.find((x) => x.id === el.dataset.id); if (s) { closeModal(); openSessionEditor(s, false); } },
+  });
 }
 function questLine(st, w, daysLeft) {
   const m = medalOf(st);
@@ -1054,11 +1130,9 @@ function weekCard() {
       ${liftBadges(w, g)}</div>
     <div class="goal tile-peach"><div class="row"><span class="grow il">${ART.jog(30)}Jogging</span><span class="num"><b>${w.jogMin}</b> / ${g.jogMin} min</span></div>
       ${jogRoad(w, st)}</div></div>
-    <div class="row q-actions" style="flex-wrap:wrap">
-      <button class="btn sm soft" data-act="quick-log" data-k="jog">+ Jog</button>
-      <button class="btn sm soft" data-act="quick-log" data-k="class">+ Class</button>
-      <button class="btn sm soft" data-act="watch-paste">${ART.watch(20)} From Watch</button></div>
-    <div class="lbl q-shelf-l">Medal shelf <span class="faint">· last 6 weeks</span></div>
+    <div class="row q-actions"><button class="btn soft grow il" data-act="pt-log">${ART.flex(26)} Log a PT session</button></div>
+    <div class="row q-shelf-l"><span class="lbl grow">Medal shelf <span class="faint">· tap a week</span></span>
+      <button class="btn sm ghost" data-act="week-detail" data-ws="${ws}">This week ›</button></div>
     ${medalShelf(ws, g)}
   </section>`;
 }
@@ -1291,7 +1365,7 @@ function quickAdd() {
       ${nd ? `<button class="qa lav" data-act="m:start"><span class="qa-e">${ART.lift(44)}</span><b>Start workout</b><span>${esc(nd.name)}</span></button>` : ''}
       <button class="qa peach" data-act="m:jog"><span class="qa-e">${ART.jog(44)}</span><b>Log a jog</b><span>Minutes &amp; km</span></button>
       <button class="qa mint" data-act="m:cls"><span class="qa-e">${ART.dance(44)}</span><b>Log a class</b><span>Pilates, yoga…</span></button>
-      <button class="qa sky" data-act="m:watch"><span class="qa-e">${ART.watch(44)}</span><b>From Watch</b><span>Paste workout</span></button>
+      <button class="qa sky" data-act="m:pt"><span class="qa-e">${ART.flex(44)}</span><b>PT session</b><span>Just pick the focus</span></button>
       <button class="qa plain" data-act="m:past"><span class="qa-e">${ART.calendar(44)}</span><b>Log past</b><span>Any earlier day</span></button>
       <button class="qa plain" data-act="m:scan"><span class="qa-e">${ART.scan(44)}</span><b>Body scan</b><span>Upload a result</span></button>
     </div>`, {
@@ -1299,7 +1373,7 @@ function quickAdd() {
     start: () => { closeModal(); startWorkout(nd.id); },
     jog: () => { closeModal(); quickLogModal('jog'); },
     cls: () => { closeModal(); quickLogModal('class'); },
-    watch: () => { closeModal(); pasteFromWatch(); },
+    pt: () => { closeModal(); ptLogModal(); },
     past: () => { closeModal(); logPastModal(); },
     scan: () => { closeModal(); scanModal(); },
   });
@@ -2253,6 +2327,8 @@ document.addEventListener('click', async (ev) => {
     case 'quick-log': quickLogModal(t.dataset.k); break;
     case 'watch-paste': pasteFromWatch(); break;
     case 'quick-add': quickAdd(); break;
+    case 'pt-log': ptLogModal(); break;
+    case 'week-detail': weekModal(+t.dataset.ws); break;
     case 'watch-setup': watchSetup(); break;
     case 'mem-edit': memModal(); break;
     case 'mem-decide': memDecide(); break;

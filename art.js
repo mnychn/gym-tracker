@@ -148,93 +148,19 @@
     if (up < 0) ang += 180;
     return { mx, my, ang, rx: len * 0.34, off: (wS + wE) / 4 * 0.55 };
   };
-  A.buddy = ({ m = 0, j = 0, gold = false, size = 160, pose = 'flex' } = {}) => {
-    const st = bStyle(m, j), k = st.k, q = st.q, P0 = POSES[pose] || POSES.flex, D = P0.dur;
-    const arms = { l: P0.l, r: P0.r === 'mirror' ? P0.l.map(mirror) : P0.r };
-    const legs = P0.legs || { l: FR(STAND.l), r: FR(STAND.r) };
-    // chunky, tapered limbs: thicker with muscle (arms) and leg power (legs)
-    const wS = 26 + k * 12, wE = 17 + k * 5, wH = 15 + k * 4, pr = wH / 2 + 3;
-    const wHip = 30 + q * 6, wKn = 22 + q * 5, wFt = 19 + q * 4;
-    const by = 2 + k * 11; // bicep bulge height
-    // every limb as a list of shapes; drawn twice (outline layer, then white fill layer) so they merge into one silhouette
-    const armShapes = ([A0, B0]) => {
-      const a = bic(A0, wS, wE), b = bic(B0, wS, wE);
-      let bAng = b.ang; while (bAng - a.ang > 180) bAng -= 360; while (a.ang - bAng > 180) bAng += 360;
-      return (attrs) => `<path d="${seg(A0[0], A0[1], wS, wE)}" ${attrs}>${anim('d', seg(A0[0], A0[1], wS, wE), seg(B0[0], B0[1], wS, wE), D)}</path>
-        <path d="${seg(A0[1], A0[2], wE, wH)}" ${attrs}>${anim('d', seg(A0[1], A0[2], wE, wH), seg(B0[1], B0[2], wE, wH), D)}</path>
-        <circle cx="${A0[1][0]}" cy="${A0[1][1]}" r="${wE / 2}" ${attrs}>${anim('cx', A0[1][0], B0[1][0], D)}${anim('cy', A0[1][1], B0[1][1], D)}</circle>
-        <circle cx="${A0[2][0]}" cy="${A0[2][1]}" r="${pr}" ${attrs}>${anim('cx', A0[2][0], B0[2][0], D)}${anim('cy', A0[2][1], B0[2][1], D)}</circle>
-        <g transform="translate(${a.mx.toFixed(1)} ${a.my.toFixed(1)})">${animT('translate', `${a.mx.toFixed(1)} ${a.my.toFixed(1)}`, `${b.mx.toFixed(1)} ${b.my.toFixed(1)}`, D)}<g transform="rotate(${a.ang.toFixed(1)})">${animT('rotate', a.ang.toFixed(1), bAng.toFixed(1), D)}
-          <ellipse cx="0" cy="${(-a.off).toFixed(1)}" rx="${a.rx.toFixed(1)}" ry="${(a.off * 0.6 + by).toFixed(1)}" ${attrs}/></g></g>`;
-    };
-    const legShapes = ([A0, B0], dir) => (attrs) => `<path d="${seg(A0[0], A0[1], wHip, wKn)}" ${attrs}>${anim('d', seg(A0[0], A0[1], wHip, wKn), seg(B0[0], B0[1], wHip, wKn), D)}</path>
-        <path d="${seg(A0[1], A0[2], wKn, wFt)}" ${attrs}>${anim('d', seg(A0[1], A0[2], wKn, wFt), seg(B0[1], B0[2], wKn, wFt), D)}</path>
-        <circle cx="${A0[1][0]}" cy="${A0[1][1]}" r="${wKn / 2}" ${attrs}>${anim('cx', A0[1][0], B0[1][0], D)}${anim('cy', A0[1][1], B0[1][1], D)}</circle>
-        <ellipse cx="${A0[2][0] + dir * 3}" cy="${A0[2][1]}" rx="${wFt / 2 + 3}" ry="${wFt / 2 - 1}" ${attrs}>${anim('cx', A0[2][0] + dir * 3, B0[2][0] + dir * 3, D)}${anim('cy', A0[2][1], B0[2][1], D)}</ellipse>`;
-    const TAIL = 'M150 172 C204 180 216 136 196 102';
-    const run = P0.run || 0, dy = P0.dy || 0;
-    const body = (attrs, tailW, tailC) => `<path d="${TAIL}" stroke="${tailC}" stroke-width="${tailW}" fill="none" stroke-linecap="round"/><path d="${BODY}" ${attrs}/>`;
-    // arms sit on top of the body with their own outline, except around the shoulder so they grow out of it seamlessly
-    const uid = Math.random().toString(36).slice(2, 8), R = wS / 2 + 5;
-    const shoulderMask = (side) => { const S0 = arms[side][0][0]; return `<mask id="bd-sh-${side}-${uid}" maskUnits="userSpaceOnUse" x="-60" y="-60" width="340" height="340"><rect x="-60" y="-60" width="340" height="340" fill="#fff"/><circle cx="${S0[0]}" cy="${S0[1]}" r="${R.toFixed(1)}" fill="#000"/></mask>`; };
-    const armSvg = (side) => `<g mask="url(#bd-sh-${side}-${uid})">${armShapes(arms[side])(OUTL)}</g>${armShapes(arms[side])(FILL)}`;
-    const OUTL = `fill="${OUT}" stroke="${OUT}" stroke-width="7" stroke-linejoin="round"`, FILL = 'fill="#fff"';
-    const legsL = legShapes(legs.l, -1), legsR = legShapes(legs.r, 1);
-    const moveBody = animT('translate', '0 0', `0 ${dy}`, D);
-    const speed = run ? `<g class="bd-speed">${[0, 1, 2].map((i) => `<path d="M${6 - i * 4} ${104 + i * 16} h24" stroke="${INK}" stroke-width="4" stroke-linecap="round" style="opacity:${q > i * 0.4 ? 1 : 0}"/>`).join('')}</g>` : '';
-    const happy = Math.max(k, q) >= 1, asleep = Math.max(k, q) <= 0;
-    // expressions (from the reference sheets): calm dots, determined brows, "> <" strain, "^ ^" happy, puffing "o", asleep "- -"
-    const FACES = {
-      dot: `<circle cx="99" cy="84" r="3.3" fill="${INK}"/><circle cx="121" cy="84" r="3.3" fill="${INK}"/><path d="M106 93 q4 3 8 0" stroke="${INK}" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
-      focus: `<circle cx="99" cy="85" r="3.3" fill="${INK}"/><circle cx="121" cy="85" r="3.3" fill="${INK}"/><path d="M92 76 l10 4 M128 76 l-10 4" stroke="${INK}" stroke-width="2.8" stroke-linecap="round"/><path d="M106 94 h8" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>`,
-      strain: `<path d="M94 80 l7 4 -7 4 M126 80 l-7 4 7 4" stroke="${INK}" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M103 91 h14 v5 q-7 4 -14 0 z" fill="#fff" stroke="${INK}" stroke-width="2.4" stroke-linejoin="round"/><path d="M103 93.5 h14" stroke="${INK}" stroke-width="1.6"/><path d="M84 74 q-3 5 0 7 q3 -2 0 -7z" fill="#fff" stroke="${INK}" stroke-width="1.6"/>`,
-      happy: `<path d="M94 86 q5 -6 10 0 M116 86 q5 -6 10 0" stroke="${INK}" stroke-width="2.8" fill="none" stroke-linecap="round"/><path d="M104 91 q6 7 12 0 z" fill="${INK}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>`,
-      puff: `<circle cx="99" cy="84" r="3.3" fill="${INK}"/><circle cx="121" cy="84" r="3.3" fill="${INK}"/><ellipse cx="110" cy="94" rx="3.2" ry="3.8" fill="${INK}"/>`,
-      sleep: `<path d="M94 85 h8 M118 85 h8" stroke="${INK}" stroke-width="2.8" stroke-linecap="round"/><path d="M107 93 q3 2 6 0" stroke="${INK}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`,
-    };
-    const MOODS = { nap: ['sleep', 'sleep'], press: ['focus', 'strain'], curl: ['dot', 'strain'], squat: ['focus', 'strain'], flex: ['happy', 'strain'],
-      victory: ['happy', 'happy'], wave: ['happy', 'dot'], run: ['puff', 'focus'], jumprope: ['puff', 'happy'] };
-    const [fa, fb] = asleep ? ['sleep', 'sleep'] : MOODS[pose] || ['dot', 'dot'];
-    const swap = (vals) => (still ? '' : `<animate attributeName="opacity" values="${vals}" keyTimes="0;.25;.75" dur="${D}s" calcMode="discrete" repeatCount="indefinite"/>`);
-    const face = fa === fb ? `<g class="bd-eyes">${FACES[fa]}</g>`
-      : `<g class="bd-eyes">${FACES[fa]}${swap('1;0;1')}</g><g opacity="${still ? 0 : 0}">${FACES[fb]}${swap('0;1;0')}</g>`;
-    const band = q > 0 ? `<g clip-path="url(#bd-clip)"><rect x="40" y="66" width="140" height="9" fill="${INK}"/></g><path d="M148 70 l16 -6 M148 72 l15 6" stroke="${INK}" stroke-width="5" stroke-linecap="round"/>
-      ${q >= 0.5 ? `<path d="M150 84 q4 7 0 10 q-4 -3 0 -10z" fill="#fff" stroke="${INK}" stroke-width="1.8"/>` : ''}` : '';
-    const crown = gold ? `<path d="M88 56 l-3 -22 14 12 11 -18 11 18 14 -12 -3 22 z" fill="#fff" stroke="${OUT}" stroke-width="3" stroke-linejoin="round"/>` : '';
-    // sneakers once you've jogged; wings at the jogging goal
-    const shoe = ([A0, B0], dir) => (q > 0 ? `<g><path d="M-14 2 q0 -10 12 -10 q14 0 16 10 z" fill="#fff" stroke="${OUT}" stroke-width="3" stroke-linejoin="round" transform="scale(${dir < 0 ? -1 : 1} 1)"/>
-        ${q >= 1 ? `<path d="M${-dir * 10} -6 q${-dir * 14} -12 ${-dir * 20} -4 q${dir * 6} 2 ${dir * 4} 6 q${-dir * 8} 0 ${-dir * 12} 4 q${dir * 10} 4 ${dir * 16} 0z" fill="#fff" stroke="${OUT}" stroke-width="2"/>` : ''}
-        <animateTransform attributeName="transform" type="translate" values="${pt(A0[2])};${pt(B0[2])};${pt(A0[2])}" dur="${D}s" ${SPL}/></g>`.replace('<g>', `<g transform="translate(${pt(A0[2])})">`) : '');
-    // equipment that follows the paws
-    const hA = [arms.l[0][2], arms.r[0][2]], hB = [arms.l[1][2], arms.r[1][2]];
-    const plate = (x, y) => `<ellipse cx="${x}" cy="${y}" rx="9" ry="22" fill="#fff" stroke="${INK}" stroke-width="3"/><circle cx="${x}" cy="${y}" r="2.4" fill="${INK}"/>`;
-    const bar = P0.bar ? `<g>${animT('translate', '0 0', `0 ${hB[0][1] - hA[0][1]}`, D)}<path d="M${hA[0][0] - 18} ${hA[0][1]} H${hA[1][0] + 18}" stroke="${INK}" stroke-width="5" stroke-linecap="round"/>${plate(hA[0][0] - 26, hA[0][1])}${plate(hA[1][0] + 26, hA[1][1])}</g>` : '';
-    const db = P0.db ? [0, 1].map((i) => `<g transform="translate(${pt(hA[i])})">${animT('translate', pt(hA[i]), pt(hB[i]), D)}<path d="M-15 0 h30" stroke="${INK}" stroke-width="4" stroke-linecap="round"/><rect x="-22" y="-10" width="9" height="20" rx="3" fill="#fff" stroke="${INK}" stroke-width="2.6"/><rect x="13" y="-10" width="9" height="20" rx="3" fill="#fff" stroke="${INK}" stroke-width="2.6"/></g>`).join('') : '';
-    const rope = P0.rope ? `<path d="M32 150 Q110 -80 188 150" stroke="${INK}" stroke-width="2.6" fill="none">${anim('d', 'M32 150 Q110 -80 188 150', 'M32 150 Q110 268 188 150', D)}</path>` : '';
-    const wave = pose === 'wave' ? `<path d="M206 48 q6 4 4 12 M214 42 q7 6 4 16" stroke="${INK}" stroke-width="3" fill="none" stroke-linecap="round"/>` : '';
-    return `<svg class="buddy pose-${pose}" data-pose="${pose}" data-gold="${gold ? 1 : ''}" width="${size}" height="${size}" viewBox="0 -6 220 220" aria-hidden="true">
-      <defs><clipPath id="bd-clip"><path d="${BODY}"/></clipPath>${shoulderMask('l')}${shoulderMask('r')}</defs>
-      <ellipse class="bd-shadow" cx="110" cy="210" rx="62" ry="4" fill="${INK}" opacity=".08"/>
-      ${speed}
-      <g class="bd-zzz" style="opacity:${asleep ? 1 : 0}"><path d="M156 30 h11 l-11 11 h11 M174 12 h8 l-8 8 h8 M188 -2 h6 l-6 6 h6" stroke="${INK}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
-      ${rope}
-      <g class="bd-all">
-        ${P0.behind ? `<g>${moveBody}${bar}</g>` : ''}
-        ${legsL(OUTL)}${legsR(OUTL)}<g>${moveBody}${body(OUTL, 15, OUT)}</g>
-        ${legsL(FILL)}${legsR(FILL)}<g>${moveBody}${body(FILL, 8, '#fff')}</g>
-        <g>${moveBody}${armSvg('l')}${armSvg('r')}</g>
-        ${shoe(legs.l, -1)}${shoe(legs.r, 1)}
-        <g>${moveBody}${band}${crown}${face}${P0.behind ? '' : bar}${db}${wave}</g>
-      </g></svg>`;
+  // Buddy: the user's own animated gym-cat loops (mascot/*.webp, transparent background). Old pose names map onto them.
+  const MASCOT = { treadmill: 'treadmill-run', press: 'overhead-press', curl: 'dumbbell-curl', row: 'cable-row', jumprope: 'jump-rope',
+    boxing: 'punching-bag', bench: 'bench-press', legpress: 'leg-press', water: 'water-break', nap: 'sleeping' };
+  const ALIAS = { run: 'treadmill', squat: 'legpress', flex: 'curl', victory: 'boxing', wave: 'water' };
+  A.POSES = Object.keys(MASCOT);
+  A.buddy = ({ gold = false, size = 160, pose = 'curl' } = {}) => {
+    const name = MASCOT[pose] ? pose : ALIAS[pose] || 'curl';
+    return `<img class="buddy pose-${name}" data-pose="${name}" data-gold="${gold ? 1 : ''}" src="mascot/${MASCOT[name]}.webp" width="${size}" height="${size}" alt="" draggable="false">`;
   };
-  const BODY = catD(110, 120, 2.5);
-  /** Swap Buddy for a new muscle / leg power and give it a little "pump" bounce. */
-  A.buddySet = (el, m, j) => {
+  /** Swap Buddy for its new state and give it a little "pump" bounce. */
+  A.buddySet = (el) => {
     if (!el || !el.parentNode) return;
-    const wrap = document.createElement('div');
-    wrap.innerHTML = A.buddy({ m, j, gold: !!el.dataset.gold, pose: el.dataset.pose, size: +el.getAttribute('width') });
-    const nu = wrap.firstElementChild; nu.classList.add('bd-pump');
-    el.replaceWith(nu);
+    el.classList.remove('bd-pump'); void el.offsetWidth; el.classList.add('bd-pump');
   };
   window.ART = A;
 }());

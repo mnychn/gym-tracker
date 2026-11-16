@@ -1280,3 +1280,4 @@ h1 { font-weight: 800; letter-spacing: -.01em; }
 .mcat.done .mcat-r svg { stroke: var(--accent); stroke-width: 2.6; }
 .mw-back { gap: 2px; padding: 0 12px 0 6px; }
 .mw-back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; }
+img.buddy { -webkit-user-select: none; user-select: none; -webkit-user-drag: none; -webkit-touch-callout: none; object-fit: contain; }

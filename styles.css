@@ -1073,3 +1073,12 @@ h1 { font-weight: 700; letter-spacing: -.02em; } .title, .hero h2, .b-msg { font
 .quest .q-hero { display: flex; flex-direction: column; }
 .quest .q-buddy { order: -1; margin-bottom: 4px; }
 .quest .q-hero > .row:first-child { margin-top: 2px; }
+/* Buddy: little idle motions on top of the exercise loops */
+.buddy .bd-tail { transform-box: fill-box; transform-origin: 0% 100%; animation: bd-wag 2.4s ease-in-out infinite; }
+@keyframes bd-wag { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-9deg); } }
+.buddy .bd-zzz { transform-box: fill-box; animation: bd-zzz 3s ease-in-out infinite; }
+@keyframes bd-zzz { 0% { transform: translate(0, 4px); } 50% { transform: translate(4px, -4px); } 100% { transform: translate(0, 4px); } }
+.buddy.pose-nap .bd-all { animation-duration: 4s; }
+.buddy:not(.pose-nap) .bd-all { animation: none; }
+@media (prefers-reduced-motion: reduce) { .buddy .bd-tail, .buddy .bd-zzz { animation: none; } }
+.q-buddy .bd-pips.peach i.on, .q-buddy .bd-pips i.on { background: var(--accent); border-color: var(--accent); } .bd-pips.peach i { border-color: var(--edge); }

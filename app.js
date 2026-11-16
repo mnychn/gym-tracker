@@ -1384,7 +1384,7 @@ function buddyState(ws = weekStartOf(new Date())) {
   const g = db.goals, w = weekStats(ws), st = weekStars(w, g);
   return { w, st, m: w.gym / st.liftMax, j: w.jogMin / (st.jogMax * st.per), gold: medalOf(st) === 'gold' };
 }
-const LIFT_POSES = ['flex', 'flexOne', 'victory', 'lift', 'wave'], RUN_POSES = ['run', 'run2'];
+const LIFT_POSES = ['press', 'curl', 'squat', 'flex', 'victory', 'wave'], RUN_POSES = ['run', 'jumprope'];
 /** A different pose from last time. */
 function nextPose(list) {
   const opts = list.filter((p) => p !== ui.lastPose);
@@ -1889,7 +1889,7 @@ function bodyHero(s) {
       <div class="b-msg">${msg}</div>
       <div class="b-counts"><span class="b-c good"><b class="num">${good}</b> optimal</span><span class="b-c warn"><b class="num">${work}</b> to work on</span></div>
       <span class="b-next il">${ART.calendar(20)}Next scan ${nextScanText(s)}</span></div>
-    ${(() => { const b = buddyState(); return ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose: !b.w.gym && !b.w.jogMin ? 'nap' : mood === 'happy' ? pick(['victory', 'wave', 'flexOne']) : pick(['flex', 'lift']), size: 168 }); })()}
+    ${(() => { const b = buddyState(); return ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose: !b.w.gym && !b.w.jogMin ? 'nap' : mood === 'happy' ? pick(['victory', 'wave', 'flex']) : pick(['press', 'curl', 'squat']), size: 168 }); })()}
   </section>`;
 }
 function bodyView() {

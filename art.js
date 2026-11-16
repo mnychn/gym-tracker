@@ -114,17 +114,17 @@
   const FR = (a, b = a) => [a, b];
   const mirror = (a) => a.map(([x, y]) => [220 - x, y]);
   const POSES = {
-    nap: { dur: 3.4, l: FR([[62, 136], [50, 158], [52, 176]]), r: 'mirror' },
-    press: { dur: 1.9, bar: true, l: FR([[62, 126], [30, 140], [40, 112]], [[64, 120], [38, 84], [44, 40]]), r: 'mirror' },
-    curl: { dur: 1.5, db: true, l: FR([[62, 128], [40, 154], [38, 180]], [[62, 128], [36, 152], [40, 120]]), r: 'mirror' },
-    squat: { dur: 2.1, bar: true, behind: true, dy: 16, l: FR([[62, 120], [30, 112], [38, 90]]), r: 'mirror',
+    nap: { dur: 3.4, l: FR([[76, 136], [50, 158], [52, 176]]), r: 'mirror' },
+    press: { dur: 1.9, bar: true, l: FR([[76, 124], [30, 140], [40, 112]], [[76, 124], [38, 84], [44, 40]]), r: 'mirror' },
+    curl: { dur: 1.5, db: true, l: FR([[76, 128], [40, 154], [38, 180]], [[76, 128], [36, 152], [40, 120]]), r: 'mirror' },
+    squat: { dur: 2.1, bar: true, behind: true, dy: 16, l: FR([[76, 120], [30, 112], [38, 90]]), r: 'mirror',
       legs: { l: FR(STAND.l, [[90, 186], [64, 192], [82, 202]]), r: FR(STAND.r, [[130, 186], [156, 192], [138, 202]]) } },
-    flex: { dur: 1.2, l: FR([[62, 128], [16, 122], [20, 84]], [[62, 126], [12, 114], [26, 78]]), r: 'mirror' },
-    victory: { dur: 0.9, l: FR([[66, 116], [40, 84], [30, 50]], [[66, 116], [44, 80], [40, 46]]), r: 'mirror' },
-    wave: { dur: 0.8, l: FR([[62, 132], [40, 156], [40, 178]]), r: FR([[158, 120], [190, 102], [198, 66]], [[158, 120], [192, 98], [214, 72]]) },
-    run: { dur: 0.6, run: 1, dy: -6, l: FR([[62, 128], [36, 144], [28, 122]], [[62, 128], [42, 156], [30, 168]]), r: FR([[158, 128], [178, 156], [190, 168]], [[158, 128], [184, 144], [192, 122]]),
+    flex: { dur: 1.2, l: FR([[76, 128], [16, 122], [20, 84]], [[76, 126], [12, 114], [26, 78]]), r: 'mirror' },
+    victory: { dur: 0.9, l: FR([[76, 116], [40, 84], [30, 50]], [[76, 116], [44, 80], [40, 46]]), r: 'mirror' },
+    wave: { dur: 0.8, l: FR([[76, 132], [40, 156], [40, 178]]), r: FR([[144, 120], [190, 102], [198, 66]], [[144, 120], [192, 98], [214, 72]]) },
+    run: { dur: 0.6, run: 1, dy: -6, l: FR([[76, 128], [36, 144], [28, 122]], [[76, 128], [42, 156], [30, 168]]), r: FR([[144, 128], [178, 156], [190, 168]], [[144, 128], [184, 144], [192, 122]]),
       legs: { l: FR([[96, 170], [80, 188], [68, 200]], [[96, 166], [106, 186], [116, 200]]), r: FR([[124, 170], [136, 188], [150, 200]], [[124, 166], [114, 186], [104, 200]]) } },
-    jumprope: { dur: 0.8, rope: true, dy: -20, l: FR([[62, 132], [40, 150], [32, 150]]), r: 'mirror',
+    jumprope: { dur: 0.8, rope: true, dy: -20, l: FR([[76, 132], [40, 150], [32, 150]]), r: 'mirror',
       legs: { l: FR(STAND.l, [[90, 150], [84, 166], [90, 180]]), r: FR(STAND.r, [[130, 150], [136, 166], [130, 180]]) } },
   };
   A.POSES = Object.keys(POSES);
@@ -173,7 +173,11 @@
         <ellipse cx="${A0[2][0] + dir * 3}" cy="${A0[2][1]}" rx="${wFt / 2 + 3}" ry="${wFt / 2 - 1}" ${attrs}>${anim('cx', A0[2][0] + dir * 3, B0[2][0] + dir * 3, D)}${anim('cy', A0[2][1], B0[2][1], D)}</ellipse>`;
     const TAIL = 'M150 172 C204 180 216 136 196 102';
     const run = P0.run || 0, dy = P0.dy || 0;
-    const body = (attrs, tailW, tailC) => `<path d="${TAIL}" stroke="${tailC}" stroke-width="${tailW}" fill="none" stroke-linecap="round"/>${armShapes(arms.l)(attrs)}${armShapes(arms.r)(attrs)}<path d="${BODY}" ${attrs}/>`;
+    const body = (attrs, tailW, tailC) => `<path d="${TAIL}" stroke="${tailC}" stroke-width="${tailW}" fill="none" stroke-linecap="round"/><path d="${BODY}" ${attrs}/>`;
+    // arms sit on top of the body with their own outline, except around the shoulder so they grow out of it seamlessly
+    const uid = Math.random().toString(36).slice(2, 8), R = wS / 2 + 5;
+    const shoulderMask = (side) => { const S0 = arms[side][0][0]; return `<mask id="bd-sh-${side}-${uid}" maskUnits="userSpaceOnUse" x="-60" y="-60" width="340" height="340"><rect x="-60" y="-60" width="340" height="340" fill="#fff"/><circle cx="${S0[0]}" cy="${S0[1]}" r="${R.toFixed(1)}" fill="#000"/></mask>`; };
+    const armSvg = (side) => `<g mask="url(#bd-sh-${side}-${uid})">${armShapes(arms[side])(OUTL)}</g>${armShapes(arms[side])(FILL)}`;
     const OUTL = `fill="${OUT}" stroke="${OUT}" stroke-width="7" stroke-linejoin="round"`, FILL = 'fill="#fff"';
     const legsL = legShapes(legs.l, -1), legsR = legShapes(legs.r, 1);
     const moveBody = animT('translate', '0 0', `0 ${dy}`, D);
@@ -209,7 +213,7 @@
     const rope = P0.rope ? `<path d="M32 150 Q110 -80 188 150" stroke="${INK}" stroke-width="2.6" fill="none">${anim('d', 'M32 150 Q110 -80 188 150', 'M32 150 Q110 268 188 150', D)}</path>` : '';
     const wave = pose === 'wave' ? `<path d="M206 48 q6 4 4 12 M214 42 q7 6 4 16" stroke="${INK}" stroke-width="3" fill="none" stroke-linecap="round"/>` : '';
     return `<svg class="buddy pose-${pose}" data-pose="${pose}" data-gold="${gold ? 1 : ''}" width="${size}" height="${size}" viewBox="0 -6 220 220" aria-hidden="true">
-      <defs><clipPath id="bd-clip"><path d="${BODY}"/></clipPath></defs>
+      <defs><clipPath id="bd-clip"><path d="${BODY}"/></clipPath>${shoulderMask('l')}${shoulderMask('r')}</defs>
       <ellipse class="bd-shadow" cx="110" cy="210" rx="62" ry="4" fill="${INK}" opacity=".08"/>
       ${speed}
       <g class="bd-zzz" style="opacity:${asleep ? 1 : 0}"><path d="M156 30 h11 l-11 11 h11 M174 12 h8 l-8 8 h8 M188 -2 h6 l-6 6 h6" stroke="${INK}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
@@ -218,6 +222,7 @@
         ${P0.behind ? `<g>${moveBody}${bar}</g>` : ''}
         ${legsL(OUTL)}${legsR(OUTL)}<g>${moveBody}${body(OUTL, 15, OUT)}</g>
         ${legsL(FILL)}${legsR(FILL)}<g>${moveBody}${body(FILL, 8, '#fff')}</g>
+        <g>${moveBody}${armSvg('l')}${armSvg('r')}</g>
         ${shoe(legs.l, -1)}${shoe(legs.r, 1)}
         <g>${moveBody}${band}${crown}${face}${P0.behind ? '' : bar}${db}${wave}</g>
       </g></svg>`;

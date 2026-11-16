@@ -1364,10 +1364,91 @@ function memIcs() {
   toast('Opening calendar reminders…');
 }
 
-/** Greeting header: "Hello, Name" with today's date. */
+// ---------------------------------------------------------------- daily stars (birth chart from Settings; computed on device)
+// Low-precision positions (about 1–2°): good enough for signs. Houses are whole-sign from the rising sign.
+const SIGNS = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'];
+const GLYPH = ['♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓'].map((g) => `${g}︎`);
+// birthplace → [latitude, longitude, standard UTC offset in hours]
+const PLACES = {
+  'Taiwan (Taipei)': [25.03, 121.57, 8], 'Taiwan (Taichung)': [24.15, 120.67, 8], 'Taiwan (Kaohsiung)': [22.63, 120.30, 8],
+  'Hong Kong': [22.32, 114.17, 8], Singapore: [1.35, 103.82, 8], 'Kuala Lumpur': [3.14, 101.69, 8], Shanghai: [31.23, 121.47, 8],
+  Tokyo: [35.68, 139.69, 9], Seoul: [37.57, 126.98, 9], Sydney: [-33.87, 151.21, 10], Melbourne: [-37.81, 144.96, 10],
+  London: [51.51, -0.13, 0], 'New York': [40.71, -74.01, -5], 'Los Angeles': [34.05, -118.24, -8],
+};
+const rad = (d) => (d * Math.PI) / 180, norm360 = (d) => ((d % 360) + 360) % 360;
+const jdDays = (ms) => ms / 864e5 + 2440587.5 - 2451545.0; // days since J2000
+function sunLon(d) { const g = rad(357.529 + 0.98560028 * d); return norm360(280.459 + 0.98564736 * d + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)); }
+function moonLon(d) {
+  const L = 218.316 + 13.176396 * d, M = rad(134.963 + 13.064993 * d), Ms = rad(357.529 + 0.98560028 * d), D = rad(297.850 + 12.190749 * d), F = rad(93.272 + 13.229350 * d);
+  return norm360(L + 6.289 * Math.sin(M) + 1.274 * Math.sin(2 * D - M) + 0.658 * Math.sin(2 * D) + 0.214 * Math.sin(2 * M) - 0.186 * Math.sin(Ms) - 0.114 * Math.sin(2 * F));
+}
+function ascLon(d, lat, lon) {
+  const ramc = rad(norm360(280.46061837 + 360.98564736629 * d + lon)), eps = rad(23.4393);
+  return norm360((Math.atan2(Math.cos(ramc), -(Math.sin(ramc) * Math.cos(eps) + Math.tan(rad(lat)) * Math.sin(eps))) * 180) / Math.PI);
+}
+/** Natal Sun / Moon / Rising from Settings, or null if no birth date. */
+function natalChart() {
+  const s = db.settings; if (!s.birthDate) return null;
+  const [y, m, dd] = s.birthDate.split('-').map(Number);
+  const [hh, mi] = String(s.birthTime || '12:00').split(':').map(Number);
+  const pl = PLACES[s.birthPlace] || PLACES['Taiwan (Taipei)'];
+  const ut = Date.UTC(y, m - 1, dd, hh, mi) - pl[2] * 36e5, d = jdDays(ut);
+  const sign = (lon) => Math.floor(lon / 30);
+  return { sun: sign(sunLon(d)), moon: s.birthTime ? sign(moonLon(d)) : null, rising: s.birthTime ? sign(ascLon(d, pl[0], pl[1])) : null };
+}
+const HOUSE_READ = [
+  ['All about you', ['The Moon is in your sign — your feelings are loud today. Lead with them.', 'You’re the main character today. A solo workout where you set the pace suits you.']],
+  ['Treat yourself', ['Comfort and money are on your mind. A slow, steady session and a good meal will ground you.', 'Your senses are switched on — enjoy good food, music and a calm stretch.']],
+  ['Chatty day', ['Your mind is busy and curious. Messages, short trips and a podcast walk feel good.', 'Talk it out — a quick catch-up with someone could lift your mood.']],
+  ['Home & heart', ['You want to nest. Rest, family time or a home workout fits better than a crowded gym.', 'Feelings run deep today. Be gentle with yourself and keep plans cosy.']],
+  ['Play day', ['Fun and creativity glow. Try a class, dance or something new — joy is the goal.', 'Your Leo spark is lit. Do the thing that makes you feel like yourself.']],
+  ['Get it done', ['A productive, tidy-up kind of day. Routines, meal prep and a solid training session all click.', 'Small habits pay off today. Tick boxes and look after your body.']],
+  ['People day', ['Others pull your focus. Train with a friend or your PT — teamwork helps.', 'Relationships take centre stage. Meet people halfway and enjoy the company.']],
+  ['Go deep', ['Intense feelings may surface. A hard workout is a great outlet; sleep early.', 'Let something go today. Good day for honest talks and real rest.']],
+  ['Big picture', ['Restless and optimistic — get outside, go somewhere new, or plan an adventure.', 'Learning and exploring feel good. A new route for your jog would be perfect.']],
+  ['Work mode', ['Ambition is up. Focus on goals and give your best — then switch off.', 'Responsibilities call. Structure your day; a short, efficient workout fits.']],
+  ['Friends & future', ['Social and hopeful. Group plans, friends and a class workout lift you.', 'Think about what you want next — and who you want around you.']],
+  ['Recharge', ['Your battery is low-ish. Quiet time, a nap or gentle yoga is the win today.', 'Rest and reflect. Journal, sleep well, and don’t overbook yourself.']],
+];
+const ASPECT_NOTE = { 0: 'The Moon sits on your Sun — energy and confidence are high.', 4: 'The Moon flows with your Sun — things click easily.', 8: 'The Moon flows with your Sun — things click easily.',
+  3: 'The Moon squares your Sun — a bit of friction, so pace yourself.', 9: 'The Moon squares your Sun — a bit of friction, so pace yourself.', 6: 'The Moon opposes your Sun — balance your needs with others’.' };
+function phaseNote(a) {
+  if (a < 20 || a > 345) return ['🌑', 'New Moon — set one small intention.'];
+  if (a > 165 && a < 195) return ['🌕', 'Full Moon — emotions peak; a good day to release, not to start.'];
+  return a < 180 ? [a < 90 ? '🌒' : '🌔', 'Waxing Moon — build momentum.'] : [a < 270 ? '🌖' : '🌘', 'Waning Moon — wind down and tidy up.'];
+}
+/** Today's reading: where the Moon is now, relative to your chart. */
+function dailyStars() {
+  const nat = natalChart(); if (!nat) return null;
+  const d = jdDays(Date.now()), ml = moonLon(d), sl = sunLon(d), mSign = Math.floor(ml / 30);
+  const base = nat.rising != null ? nat.rising : nat.sun;
+  const house = (mSign - base + 12) % 12;
+  const [title, lines] = HOUSE_READ[house];
+  const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 864e5);
+  const [moonIcon, phase] = phaseNote(norm360(ml - sl));
+  const aspect = ASPECT_NOTE[(mSign - nat.sun + 12) % 12] || '';
+  const emo = nat.moon != null && mSign === nat.moon ? 'The Moon returns to your Moon sign — an emotional reset.' : '';
+  return { nat, mSign, house: house + 1, title, text: lines[doy % lines.length], aspect, emo, phase, moonIcon };
+}
+const ordinal = (n) => `${n}${n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'}`;
+function starsModal() {
+  const r = dailyStars(); if (!r) { go('settings'); return; }
+  const { nat } = r;
+  openModal(`<div class="row"><h3 class="grow">${GLYPH[nat.sun]} ${r.title}</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
+    <p class="small muted" style="margin:0">${new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })} · ${r.moonIcon} Moon in ${SIGNS[r.mSign]}, your ${ordinal(r.house)} house</p>
+    <p style="margin:14px 0 0;font-size:17px;line-height:1.45">${r.text}</p>
+    ${[r.aspect, r.emo, r.phase].filter(Boolean).map((t) => `<p class="small" style="margin:8px 0 0">${t}</p>`).join('')}
+    <div class="mchips stars-chips"><span>☉ Sun ${GLYPH[nat.sun]} ${SIGNS[nat.sun]}</span>${nat.moon != null ? `<span>☽ Moon ${GLYPH[nat.moon]} ${SIGNS[nat.moon]}</span>` : ''}${nat.rising != null ? `<span>↑ Rising ${GLYPH[nat.rising]} ${SIGNS[nat.rising]}</span>` : ''}</div>
+    <p class="small muted" style="margin-top:12px">Worked out on your phone from your birth details in Settings. Positions are approximate (about 1–2°), so a sign right on a border could be off by one. Just for fun.</p>
+    <div class="actions"><button class="btn primary" data-act="m:close">Nice</button></div>`, { close: closeModal });
+}
+/** Header: today's star-sign reading (or a greeting until a birth date is set) with the date. */
 function helloTitle() {
   const n = (db.settings.name || '').trim(), h = new Date().getHours();
   const hi = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  const r = dailyStars();
+  if (r) return `<button class="hello grow stars-btn" data-act="stars"><div class="hello-hi">${GLYPH[r.nat.sun]} ${SIGNS[r.nat.sun]} · ${r.moonIcon} Moon in ${SIGNS[r.mSign]}</div><h1>${r.title}</h1><div class="stars-line">${r.text}</div></button>
+    <span class="date-chip num">${new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</span>`;
   return `<div class="hello grow"><div class="hello-hi">${hi}${n ? ',' : ''} ${ART.wave(22)}</div><h1>${n ? esc(n) : 'Ready to train?'}</h1></div>
     <span class="date-chip num">${new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</span>`;
 }
@@ -2141,6 +2222,16 @@ views.settings = () => {
       <div class="setting"><div class="grow"><div>Your name</div><div class="small muted">For the greeting on Train</div></div>
         <input class="field" style="width:150px" data-bind="setting" data-k="name" value="${esc(s.name || '')}" placeholder="Optional" autocomplete="given-name"></div>
     </div>
+    <div class="section-title">Star chart</div>
+    <div class="card flush">
+      <div class="setting"><div class="grow"><div>Birth date</div><div class="small muted">For your daily reading on Train. Stays on this device.</div></div>
+        <input type="date" class="field" style="width:150px" data-bind="setting" data-k="birthDate" value="${esc(s.birthDate || '')}"></div>
+      <div class="setting"><div class="grow"><div>Birth time</div><div class="small muted">For your Moon and rising sign</div></div>
+        <input type="time" class="field" style="width:118px" data-bind="setting" data-k="birthTime" value="${esc(s.birthTime || '')}"></div>
+      <div class="setting"><div class="grow"><div>Birthplace</div></div>
+        <select class="field" style="width:170px" data-bind="setting" data-k="birthPlace">${Object.keys(PLACES).map((p) => `<option ${(s.birthPlace || 'Taiwan (Taipei)') === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></div>
+      ${(() => { const c = natalChart(); return c ? `<div class="setting"><div class="grow small muted">☉ ${SIGNS[c.sun]}${c.moon != null ? ` · ☽ ${SIGNS[c.moon]}` : ''}${c.rising != null ? ` · ↑ ${SIGNS[c.rising]} rising` : ''}</div></div>` : ''; })()}
+    </div>
     <div class="section-title">Training</div>
     <div class="card flush">
       <button class="setting setting-link" data-act="go" data-tab="routine"><div class="grow"><div>Routine</div><div class="small muted">${plural(db.routine.length, 'training day')} · exercises, sets, weights &amp; rest</div></div><span class="chev faint">${ICON.chev}</span></button>
@@ -2885,6 +2976,7 @@ document.addEventListener('click', async (ev) => {
     case 'quick-add': quickAdd(); break;
     case 'buddy-tap': buddyPoke(t); break;
     case 'pt-log': ptLogModal(); break;
+    case 'stars': starsModal(); break;
     case 'mood-day': moodModal(t.dataset.d, t.dataset.m ? +t.dataset.m : 0); break;
     case 'mood-month': ui.moodMonth = Math.min(0, (ui.moodMonth || 0) + +t.dataset.d); renderView(); break;
     case 'week-detail': weekModal(+t.dataset.ws); break;

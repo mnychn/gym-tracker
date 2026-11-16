@@ -1164,7 +1164,7 @@ function showSurprise({ emoji, title, sub, big, grow }) {
     el.className = `surprise fx-${grow ? 'grow' : fx}`; el.setAttribute('role', 'status');
     const sparks = Array.from({ length: big ? 0 : 12 }, (_, i) => `<span style="--a:${i * 30 + Math.round(Math.random() * 14)}deg">${pick(['✦', '★', '✧', '•'])}</span>`).join('');
     const fw = big ? Array.from({ length: 5 }, () => `<div class="fw" style="left:${10 + Math.random() * 80}%;top:${8 + Math.random() * 45}%;animation-delay:${(Math.random() * 0.9).toFixed(2)}s">${
-      Array.from({ length: 14 }, (_, i) => `<i style="--a:${i * (360 / 14)}deg;background:${pick(['#111', '#555', '#999'])}"></i>`).join('')}</div>`).join('') : '';
+      Array.from({ length: 14 }, (_, i) => `<i style="--a:${i * (360 / 14)}deg;background:${pick(['#6a3de8', '#f2557a', '#f7b52b', '#22a55a', '#4b9ef5'])}"></i>`).join('')}</div>`).join('') : '';
     const pic = grow ? ART.buddy({ m: grow.from.m, j: grow.from.j, gold: grow.gold, pose: grow.pose, size: 190 }) : emoji.startsWith('<') ? emoji : ART[emoji] ? ART[emoji](big ? 120 : 100) : emoji;
     el.innerHTML = `${fw}<div class="sp-card"><div class="sp-emoji">${pic}</div><div class="sp-burst" aria-hidden="true">${sparks}</div>
       <div class="sp-title">${title}</div>${sub ? `<div class="sp-sub">${sub}</div>` : ''}</div>`;

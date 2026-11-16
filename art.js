@@ -66,9 +66,9 @@
     scan: (s = 40) => svg(`<rect x="13" y="3" width="38" height="58" rx="11" fill="${L}"/><rect x="17" y="9" width="30" height="46" rx="7" fill="${CR}"/>
       <rect x="22" y="38" width="5" height="10" rx="2.5" fill="${P}"/><rect x="29.5" y="32" width="5" height="16" rx="2.5" fill="${M}"/><rect x="37" y="35" width="5" height="13" rx="2.5" fill="${LD}"/>${face(32, 19, 0.75)}`, s),
     medal: (kind = 'gold', s = 40) => {
-      const c = { gold: ['#111111', '#111111'], silver: ['#bdbdbd', '#111111'], bronze: ['#ffffff', '#111111'] }[kind] || ['#111111', '#111111'];
-      return svg(`<path d="M18 2 h11 l6 16 -9 4z" fill="#fff" stroke="#111" stroke-width="2"/><path d="M46 2 h-11 l-6 16 9 4z" fill="#fff" stroke="#111" stroke-width="2"/>
-        <circle cx="32" cy="39" r="21" fill="${c[1]}"/><circle cx="32" cy="39" r="17" fill="${c[0]}"/><path d="M32 30 l2.6 5.4 5.9 .8 -4.3 4.1 1 5.9 -5.2 -2.8 -5.2 2.8 1 -5.9 -4.3 -4.1 5.9 -.8z" fill="${kind === 'gold' ? '#fff' : '#111'}"/>${kind === 'gold' ? sparkle(51, 22, 5) : ''}`, s, `${kind} medal`);
+      const c = { gold: ['#f9c23c', '#e0950a'], silver: ['#e6e8f0', '#a9b0c3'], bronze: ['#f5b07d', '#cf7f45'] }[kind] || ['#f9c23c', '#e0950a'];
+      return svg(`<path d="M18 2 h11 l6 16 -9 4z" fill="#8b63f2"/><path d="M46 2 h-11 l-6 16 9 4z" fill="#f2557a"/>
+        <circle cx="32" cy="39" r="21" fill="${c[1]}"/><circle cx="32" cy="39" r="17" fill="${c[0]}"/><path d="M32 30 l2.6 5.4 5.9 .8 -4.3 4.1 1 5.9 -5.2 -2.8 -5.2 2.8 1 -5.9 -4.3 -4.1 5.9 -.8z" fill="#fff"/>${kind === 'gold' ? sparkle(51, 22, 5) : ''}`, s, `${kind} medal`);
     },
     noMedal: (s = 40) => svg(`<circle cx="32" cy="36" r="20" fill="none" stroke="${OUT}" stroke-width="3" stroke-dasharray="5 5"/>${face(32, 34, 0.8, 'sleep')}`, s, 'no medal'),
     flame: (s = 40) => svg(`<path d="M32 3 C36 14 52 20 52 38 C52 51 43 60 32 60 C21 60 12 51 12 38 C12 27 19 22 22 14 C25 22 28 24 30 24 C30 16 29 9 32 3 Z" fill="${PD}"/>

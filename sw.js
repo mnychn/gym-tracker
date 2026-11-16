@@ -1,10 +1,10 @@
 // Bump VERSION whenever you change any app file so devices pick up the update.
-const VERSION = 'gymlog-v41';
+const VERSION = 'gymlog-v42';
 const VENDOR = 'gymlog-vendor-1';
 const ASSETS = [
   './', './index.html', './styles.css', './app.js', './seed.js', './guides.js', './anim.js', './art.js', './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
-  './icons/maskable-512.png', './icons/apple-touch-icon.png', './fonts/outfit-latin.woff2',
+  './icons/maskable-512.png', './icons/apple-touch-icon.png', './fonts/nunito-latin.woff2',
   // exercise illustrations (RepDB free tier)
   './exercise-img/ab-wheel-rollout-peak.webp',
   './exercise-img/ab-wheel-rollout-start.webp',

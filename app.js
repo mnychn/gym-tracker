@@ -99,6 +99,7 @@ function migrate(d) {
   if (!Array.isArray(d.scans)) d.scans = [];
   if (!d.moods || typeof d.moods !== 'object' || Array.isArray(d.moods)) d.moods = {};
   if (!Array.isArray(d.moodTags)) d.moodTags = [];
+  d.moodTags = d.moodTags.map((x) => (typeof x === 'string' ? { t: x, g: 'day' } : x)).filter((x) => x && x.t);
   d.goals = { ...GOAL_DEFAULTS, ...(d.goals || {}) };
   if ((d.goalsV || 1) < 2) { d.goals.sessions = 3; d.goals.scanDays = 30; d.goalsV = 2; } // 3 lifting sessions/week, monthly scans
   // days are no longer split into PT / own — you say whether your PT was there when you finish
@@ -2147,7 +2148,7 @@ views.settings = () => {
         <input type="time" class="field" style="width:118px" data-bind="setting" data-k="moodTime" value="${esc(s.moodTime || '00:00')}"></div>
       <div class="setting"><div class="grow"><div>Add reminder to Calendar</div><div class="small muted">Re-add it after changing the time (delete the old one in Calendar)</div></div><button class="btn sm" data-act="mood-ics">Add</button></div>
       ${db.moodTags.length ? `<div class="setting" style="flex-wrap:wrap"><div class="grow" style="flex-basis:100%"><div>Your tags</div><div class="small muted">Tap × to remove a tag from the list (past check-ins keep it)</div></div>
-        <div class="fchips" style="margin-top:0">${db.moodTags.map((t, i) => `<button class="fchip sm" data-act="mood-tag-del" data-i="${i}" aria-label="Remove ${esc(t)}">${esc(t)} ×</button>`).join('')}</div></div>` : ''}
+        <div class="fchips" style="margin-top:0">${db.moodTags.map((x, i) => `<button class="fchip sm" data-act="mood-tag-del" data-i="${i}" aria-label="Remove ${esc(x.t)}">${esc(x.t)} ×</button>`).join('')}</div></div>` : ''}
     </div>
     <div class="section-title">Workout</div>
     <div class="card flush">
@@ -2196,19 +2197,27 @@ views.settings = () => {
 };
 
 // ---------------------------------------------------------------- mood journal
-// One check-in per day in db.moods['YYYY-MM-DD']: { mood 1–5, sleep h, sleepQ 1–3, period 0–4, out bool, social, tags[], note }.
+// One check-in per day in db.moods['YYYY-MM-DD'], filled in card by card (each card can be skipped):
+//   sleep: sleep h, bed/wake 'HH:MM', sleepScore 1–10, sleepTags[]   cycle: period 0–4, pms 0–3, pmsTags[]
+//   move: out bool, outTime, move[]   people: social, tags[]   day: tags[]   mood: mood 1–5, feel[]   notes: { card: text }
 // The check-in after midnight (before 5 am) is for the day that just ended.
 const MOOD_NAMES = ['', 'Awful', 'Bad', 'Okay', 'Good', 'Great'];
 const FLOW = ['None', 'Spotting', 'Light', 'Medium', 'Heavy'];
-const SLEEP_Q = ['', 'Poor', 'OK', 'Great'];
+const PMS_LEVEL = ['None', 'Mild', 'Moderate', 'Strong'];
 const SOCIAL = { none: 'No one', online: 'Online / texts', person: 'In person' };
-const MOOD_TAGS = [
-  ['People', ['Family', 'Friends', 'Partner', 'Colleagues', 'Met someone new', 'Alone time', 'Argument']],
-  ['Doing', ['Work', 'Study', 'Outdoors', 'Nature', 'Hobby', 'Chores', 'Errands', 'Travel', 'Lots of screen time', 'Lazy day']],
-  ['Mind', ['Stressed', 'Anxious', 'Productive', 'Relaxed', 'Lonely', 'Grateful', 'Overwhelmed']],
-  ['Body', ['Cramps', 'Headache', 'Bloated', 'Sick', 'Tired', 'Sore', 'Breakouts']],
-  ['Food & drink', ['Ate well', 'Junk food', 'Caffeine', 'Alcohol', 'Skipped meals', 'Cravings']],
-];
+const OUT_TIME = ['Under 15 min', '15–60 min', '1–3 h', '3 h +'];
+const SLEEP_BAD = ['Interrupted sleep', 'Couldn’t fall asleep', 'Woke too early', 'Restless', 'Bad dreams', 'Too hot / cold', 'Noise', 'Pain or cramps', 'Racing thoughts', 'Screens in bed', 'Late caffeine', 'Alcohol', 'Bathroom trips', 'Went to bed late'];
+const SLEEP_GOOD = ['Early night', 'No screens before bed', 'Wind-down routine', 'Read before bed', 'Worked out earlier', 'Cool, dark room', 'Slept in', 'Napped'];
+const PMS_TAGS = ['Mood swings', 'Irritable', 'Teary', 'Anxious', 'Low mood', 'Cravings', 'Bloating', 'Tender breasts', 'Cramps', 'Headache', 'Fatigue', 'Breakouts', 'Back pain', 'Trouble sleeping'];
+const MOVE_TAGS = ['Gym workout', 'PT session', 'Jog / run', 'Walk', 'Class', 'Yoga / stretching', 'Cycling', 'Swim', 'Sport', 'Dance', 'Just rested'];
+const OUT_TAGS = ['Sunshine', 'Nature', 'Errands', 'Commute', 'Café / restaurant', 'Shopping'];
+const PEOPLE_TAGS = ['Family', 'Friends', 'Partner', 'Colleagues', 'Met someone new', 'Good chat', 'Alone time', 'Argument', 'Felt left out'];
+const DAY_TAGS = [['Doing', ['Work', 'Study', 'Hobby', 'Chores', 'Travel', 'Lots of screen time', 'Lazy day', 'Busy day', 'Productive']],
+  ['Food & drink', ['Ate well', 'Junk food', 'Caffeine', 'Alcohol', 'Skipped meals', 'Drank enough water']],
+  ['Body', ['Headache', 'Sick', 'Tired', 'Sore', 'Low energy', 'Injured']]];
+const FEEL_TAGS = ['Happy', 'Calm', 'Grateful', 'Motivated', 'Confident', 'Stressed', 'Anxious', 'Irritable', 'Sad', 'Lonely', 'Overwhelmed', 'Bored'];
+const CARDS = [['sleep', 'Sleep'], ['cycle', 'Cycle'], ['move', 'Out & moving'], ['people', 'People'], ['day', 'Your day'], ['mood', 'Mood']];
+
 const CAT_HEAD = 'M5 19.5c-.8-2.6-1-5.6-.6-8.3L5.6 4l4.2 3.6c1.4-.4 3-.4 4.4 0L18.4 4l1.2 7.2c.4 2.7.2 5.7-.6 8.3z';
 const MOOD_FACE = {
   1: '<path d="M8.4 12l2.1 1M15.6 12l-2.1 1M9.6 17.4c1.4-1.8 3.4-1.8 4.8 0"/>',
@@ -2225,7 +2234,16 @@ const addDays = (k, n) => { const d = parseDay(k); d.setDate(d.getDate() + n); r
 const dayDiff = (a, b) => Math.round((parseDay(b) - parseDay(a)) / 864e5);
 const moodDay = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); return isoDay(d); };
 const moodDayLabel = (k) => (k === isoDay(Date.now()) ? 'today' : k === addDays(isoDay(Date.now()), -1) ? 'yesterday' : fmtDate(parseDay(k)));
-const workedOut = (k) => db.sessions.some((s) => String(s.date).slice(0, 10) === k);
+const daySessions = (k) => db.sessions.filter((s) => String(s.date).slice(0, 10) === k);
+const workedOut = (k) => daySessions(k).length > 0;
+const hmMin = (hm) => { if (!hm) return null; const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
+const fmtTime = (hm) => { if (!hm || hm === '00:00') return 'midnight'; const [h, m] = String(hm).split(':').map(Number); return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); };
+const fmtH = (h) => (h == null ? '—' : `${Math.floor(h)}${h % 1 ? `<small>½</small>` : ''} h`).replace('<small>½</small>', h % 1 >= 0.5 ? '½' : '');
+const pmsDay = (e) => !!e && ((e.pms || 0) >= 1 || (e.pmsTags || []).length > 0);
+/** Every tag on a day, across all cards (used for "what affects your mood"). */
+const allTags = (e) => [...(e.tags || []), ...(e.move || []), ...(e.pmsTags || []), ...(e.sleepTags || []), ...(e.feel || [])];
+const customTags = (g) => db.moodTags.filter((x) => x.g === g).map((x) => x.t);
+
 /** What needs a check-in right now: tonight's (after 8 pm / before 5 am), or yesterday's if it was missed. */
 function moodDue() {
   const t = moodDay(), h = new Date().getHours();
@@ -2235,70 +2253,124 @@ function moodDue() {
   return null;
 }
 
-/** Period starts (first day of flow after ≥12 days without one), average cycle length, and phase lookup. */
+/** Period starts, cycle length and the PMS window — both learned from your logs once there's enough data. */
 function cycleInfo() {
   const flowDays = Object.keys(db.moods).filter((k) => (db.moods[k].period || 0) >= 2).sort();
   const starts = [];
   flowDays.forEach((k) => { const l = starts[starts.length - 1]; if (!l || dayDiff(l, k) >= 12) starts.push(k); });
   const gaps = starts.slice(1).map((k, i) => dayDiff(starts[i], k)).filter((g) => g >= 18 && g <= 45).slice(-6);
   const len = gaps.length ? Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length) : 28;
+  // PMS onset: for each period, the earliest day in the 14 before it with PMS symptoms logged
+  const onsets = [];
+  starts.forEach((s) => {
+    let first = 0;
+    for (let d = 14; d >= 1; d--) if (pmsDay(db.moods[addDays(s, -d)])) { first = d; break; }
+    if (first) onsets.push(first);
+  });
+  onsets.sort((a, b) => a - b);
+  const onset = onsets.length ? onsets[Math.floor(onsets.length / 2)] : 5;
+  const nextStartAfter = (k) => starts.find((s) => s > k) || null;
   const phase = (k) => {
     const e = db.moods[k];
     if (e && e.period >= 1) return 'period';
-    const s = starts.filter((x) => x <= k).pop(); if (!s) return null;
+    const s = starts.filter((x) => x <= k).pop();
+    const ns = nextStartAfter(k);
+    if (ns && dayDiff(k, ns) <= onset) return 'pre';
+    if (!s) return ns && dayDiff(k, ns) <= 14 ? 'luteal' : null;
     const cd = dayDiff(s, k) + 1, ov = len - 14;
     if (cd <= 5 && !(e && e.period === 0)) return 'period';
+    if (ns) { const b = dayDiff(k, ns); if (b <= 13 && b > onset) return 'luteal'; }
     if (cd < ov - 1) return 'follicular';
     if (cd <= ov + 1) return 'ovulation';
-    if (cd <= len - 5) return 'luteal';
+    if (cd <= len - onset) return 'luteal';
     if (cd <= len + 7) return 'pre';
     return null;
   };
   const last = starts[starts.length - 1] || null;
-  return { starts, len, measured: gaps.length > 0, last, next: last ? addDays(last, len) : null, phase };
+  const next = last ? addDays(last, len) : null;
+  return { starts, len, measured: gaps.length > 0, last, next, pmsFrom: next ? addDays(next, -onset) : null, onset, learned: onsets.length, phase, nextStartAfter };
 }
-const PHASES = { period: 'Period', follicular: 'Follicular', ovulation: 'Ovulation (est.)', luteal: 'Luteal', pre: 'Pre-period' };
+const PHASES = { period: 'Period', follicular: 'Follicular', ovulation: 'Ovulation (est.)', luteal: 'Luteal', pre: 'PMS window' };
 const PHASE_NOTE = {
   period: 'Energy can dip — be kind to yourself.', follicular: 'Energy usually rises — good days for hard sessions.',
-  ovulation: 'Often peak energy and confidence.', luteal: 'Energy starts easing off.', pre: 'PMS days — mood and sleep often take a hit.',
+  ovulation: 'Often peak energy and confidence.', luteal: 'Energy starts easing off.', pre: 'Your usual PMS days — mood swings are hormonal, not you. Plan easy wins.',
 };
 
 const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
-/** Every factor that splits logged days into "with" vs "without", ranked by how much mood differs. */
+/** Split days into "with" vs "without" a factor and compare a metric (mood by default). */
+function compare(days, metric, defs) {
+  const F = [];
+  defs.forEach(([label, test]) => {
+    const w = [], wo = [];
+    days.forEach((k) => { const e = db.moods[k], v = metric(e); if (v == null) return; const r = test(e, k); if (r === true) w.push(v); else if (r === false) wo.push(v); });
+    if (w.length >= 3 && wo.length >= 3) F.push({ label, n: w.length, m: wo.length, with: avg(w), without: avg(wo), diff: avg(w) - avg(wo) });
+  });
+  return F;
+}
 function moodFactors() {
   const days = Object.keys(db.moods).filter((k) => db.moods[k].mood);
   const cyc = cycleInfo();
-  const F = [];
-  const add = (label, test, kind) => {
-    const w = [], wo = [];
-    days.forEach((k) => { const r = test(db.moods[k], k); if (r === true) w.push(db.moods[k].mood); else if (r === false) wo.push(db.moods[k].mood); });
-    if (w.length >= 3 && wo.length >= 3) F.push({ label, kind, n: w.length, m: wo.length, with: avg(w), without: avg(wo), diff: avg(w) - avg(wo) });
-  };
-  const tags = new Set(); days.forEach((k) => (db.moods[k].tags || []).forEach((t) => tags.add(t)));
-  tags.forEach((t) => add(t, (e) => (e.tags || []).includes(t), 'tag'));
-  add('Left the house', (e) => (e.out == null ? null : e.out), 'core');
-  add('Saw people in person', (e) => (e.social == null ? null : e.social === 'person'), 'core');
-  add('No social contact', (e) => (e.social == null ? null : e.social === 'none'), 'core');
-  add('Worked out', (e, k) => workedOut(k), 'core');
-  add('Slept 7 h or more', (e) => (e.sleep == null ? null : e.sleep >= 7), 'sleep');
-  add('Slept badly', (e) => (e.sleepQ == null ? null : e.sleepQ === 1), 'sleep');
-  add('On your period', (e, k) => { const p = cyc.phase(k); return p ? p === 'period' : null; }, 'cycle');
-  add('Pre-period days', (e, k) => { const p = cyc.phase(k); return p ? p === 'pre' : null; }, 'cycle');
-  return F.filter((f) => Math.abs(f.diff) >= 0.15).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+  const tags = new Set(); days.forEach((k) => allTags(db.moods[k]).forEach((t) => tags.add(t)));
+  const lateBed = (e) => { const m = hmMin(e.bed); return m == null ? null : (m < 720 ? m + 1440 : m) > 1470; };
+  const defs = [...tags].map((t) => [t, (e) => allTags(e).includes(t)]).concat([
+    ['Left the house', (e) => (e.out == null ? null : e.out)],
+    ['Saw people in person', (e) => (e.social == null ? null : e.social === 'person')],
+    ['No social contact', (e) => (e.social == null ? null : e.social === 'none')],
+    ['Moved your body', (e, k) => workedOut(k) || (e.move || []).some((t) => t !== 'Just rested')],
+    ['Slept 7 h or more', (e) => (e.sleep == null ? null : e.sleep >= 7)],
+    ['Slept badly (4/10 or less)', (e) => (e.sleepScore != null ? e.sleepScore <= 4 : e.sleepQ ? e.sleepQ === 1 : null)],
+    ['Bedtime after 12:30 am', lateBed],
+    ['On your period', (e, k) => { const p = cyc.phase(k); return p ? p === 'period' : null; }],
+    ['PMS window', (e, k) => { const p = cyc.phase(k); return p ? p === 'pre' : null; }],
+  ]);
+  return compare(days, (e) => e.mood || null, defs).filter((f) => Math.abs(f.diff) >= 0.15).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+}
+function sleepFactors() {
+  const days = Object.keys(db.moods).filter((k) => db.moods[k].sleepScore != null);
+  const tags = new Set(); days.forEach((k) => (db.moods[k].sleepTags || []).forEach((t) => tags.add(t)));
+  const cyc = cycleInfo();
+  const defs = [...tags].map((t) => [t, (e) => (e.sleepTags || []).includes(t)]).concat([
+    ['Bedtime after 12:30 am', (e) => { const m = hmMin(e.bed); return m == null ? null : (m < 720 ? m + 1440 : m) > 1470; }],
+    ['Worked out that day', (e, k) => workedOut(addDays(k, -1)) || (db.moods[addDays(k, -1)] && (db.moods[addDays(k, -1)].move || []).some((t) => t !== 'Just rested')) || false],
+    ['PMS window', (e, k) => { const p = cyc.phase(k); return p ? p === 'pre' : null; }],
+  ]);
+  return compare(days, (e) => e.sleepScore, defs).filter((f) => Math.abs(f.diff) >= 0.4).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
 }
 const fmtDiff = (d) => `${d > 0 ? '+' : '−'}${Math.abs(d).toFixed(1)}`;
 
-function moodBars(rows) { // rows: [label, avg|null, n]
+function moodBars(rows, scale = [1, 5], colour = (a) => `var(--m${Math.round(a)})`) { // rows: [label, avg|null, n]
   return `<div class="mbars">${rows.map(([l, a, n]) => `<div class="mbar"><span class="mb-l">${esc(l)}</span>
-    <span class="mb-t">${a == null ? '' : `<i style="width:${Math.max(4, ((a - 1) / 4) * 100)}%;background:var(--m${Math.round(a)})"></i>`}</span>
+    <span class="mb-t">${a == null ? '' : `<i style="width:${Math.max(4, ((a - scale[0]) / (scale[1] - scale[0])) * 100)}%;background:${colour(a)}"></i>`}</span>
     <span class="mb-v num">${a == null ? '<span class="faint">—</span>' : `${a.toFixed(1)}<small> · ${n}d</small>`}</span></div>`).join('')}</div>`;
 }
-function factorRows(list) {
+function factorRows(list, unitLabel = 'Mood') {
   const max = Math.max(1, ...list.map((f) => Math.abs(f.diff)));
   return list.map((f) => `<div class="fx ${f.diff > 0 ? 'up' : 'dn'}">
     <div class="fx-h"><b>${esc(f.label)}</b><span class="num">${fmtDiff(f.diff)}</span></div>
     <div class="fx-bar"><i style="width:${(Math.abs(f.diff) / max) * 50}%"></i></div>
-    <div class="small muted">Mood ${f.with.toFixed(1)} on ${plural(f.n, 'day')} with it vs ${f.without.toFixed(1)} without</div></div>`).join('');
+    <div class="small muted">${unitLabel} ${f.with.toFixed(1)} on ${plural(f.n, 'day')} with it vs ${f.without.toFixed(1)} without</div></div>`).join('');
+}
+/** Mood in the 14 days before each period, plus the PMS symptoms you log most in that stretch. */
+function pmsInsight(cyc) {
+  const by = Array.from({ length: 15 }, () => []), sym = {}; let pre = 0;
+  Object.keys(db.moods).forEach((k) => {
+    const ns = cyc.nextStartAfter(k); if (!ns) return;
+    const b = dayDiff(k, ns); if (b < 1 || b > 14) return;
+    const e = db.moods[k]; if (e.mood) by[b].push(e.mood);
+    if (b <= cyc.onset) { pre += 1; (e.pmsTags || []).forEach((t) => { sym[t] = (sym[t] || 0) + 1; }); }
+  });
+  if (by.every((v) => !v.length)) return '';
+  const cols = [];
+  for (let b = 14; b >= 1; b--) {
+    const a = avg(by[b]);
+    cols.push(`<div class="pc${b <= cyc.onset ? ' win' : ''}" title="${b} days before: ${a ? a.toFixed(1) : 'no data'}"><i style="height:${a ? ((a - 0.6) / 4.4) * 100 : 0}%;background:${a ? `var(--m${Math.round(a)})` : 'none'}"></i><span>${b}</span></div>`);
+  }
+  const top = Object.entries(sym).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  return `<div class="section-title">Before your period</div><section class="card">
+    <div class="small muted">Average mood on each of the 14 days before a period. Shaded = your PMS window (${plural(cyc.onset, 'day')}${cyc.learned ? `, learned from ${plural(cyc.learned, 'cycle')}` : ', assumed until you log symptoms'}).</div>
+    <div class="pchart">${cols.join('')}</div><div class="small muted" style="text-align:center">days before period</div>
+    ${top.length ? `<div class="mq"><b>Most common in your PMS window</b>${top.map(([t, n]) => `<div class="mbar"><span class="mb-l">${esc(t)}</span><span class="mb-t"><i style="width:${(n / pre) * 100}%;background:var(--flow)"></i></span><span class="mb-v num">${Math.round((n / pre) * 100)}%</span></div>`).join('')}</div>` : ''}
+  </section>`;
 }
 
 function moodCalendar() {
@@ -2306,17 +2378,21 @@ function moodCalendar() {
   const y = base.getFullYear(), m = base.getMonth(), today = isoDay(now);
   const lead = (base.getDay() + 6) % 7, n = new Date(y, m + 1, 0).getDate();
   const cyc = cycleInfo();
-  const predicted = new Set();
-  if (cyc.next) for (let i = 0; i < 5; i++) predicted.add(addDays(cyc.next, i));
+  const predicted = new Set(), pmsWin = new Set();
+  if (cyc.next) {
+    for (let i = 0; i < 5; i++) predicted.add(addDays(cyc.next, i));
+    for (let i = 1; i <= cyc.onset; i++) pmsWin.add(addDays(cyc.next, -i));
+  }
   const cells = [];
   for (let i = 0; i < lead; i++) cells.push('<span></span>');
   const logged = [];
   for (let d = 1; d <= n; d++) {
     const k = `${y}-${pad(m + 1)}-${pad(d)}`, e = db.moods[k], fut = k > today;
     if (e && e.mood) logged.push(e.mood);
-    const cls = ['mday', e && e.mood ? `mm${e.mood}` : '', k === today ? 'today' : '', predicted.has(k) && !(e && e.period) ? 'pred' : ''].join(' ');
-    cells.push(`<button class="${cls}" ${fut ? 'disabled' : `data-act="mood-day" data-d="${k}"`} aria-label="${fmtDate(parseDay(k))}${e && e.mood ? `: ${MOOD_NAMES[e.mood]}` : ''}${e && e.period ? ', period' : ''}">
-      <span>${d}</span>${e && e.period ? DROP : ''}</button>`);
+    const cls = ['mday', e && e.mood ? `mm${e.mood}` : e ? 'mlog' : '', k === today ? 'today' : '',
+      predicted.has(k) && !(e && e.period) ? 'pred' : '', pmsWin.has(k) && k >= today ? 'pmsw' : ''].join(' ');
+    cells.push(`<button class="${cls}" ${fut ? 'disabled' : `data-act="mood-day" data-d="${k}"`} aria-label="${fmtDate(parseDay(k))}${e && e.mood ? `: ${MOOD_NAMES[e.mood]}` : ''}${e && e.period ? ', period' : ''}${pmsDay(e) ? ', PMS' : ''}">
+      <span>${d}</span>${e && e.period ? DROP : ''}${pmsDay(e) && !(e && e.period) ? '<i class="pdot"></i>' : ''}</button>`);
   }
   const a = avg(logged);
   return `<section class="card mcal">
@@ -2325,56 +2401,60 @@ function moodCalendar() {
       <button class="icon-btn" data-act="mood-month" data-d="1" ${ui.moodMonth >= 0 ? 'disabled' : ''} aria-label="Next month">${ICON.chev}</button></div>
     <div class="mgrid mhead">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => `<span>${d}</span>`).join('')}</div>
     <div class="mgrid">${cells.join('')}</div>
-    <div class="mlegend">${[1, 2, 3, 4, 5].map((i) => `<span>${moodFace(i, 18)}${MOOD_NAMES[i]}</span>`).join('')}<span>${DROP}Period</span>${cyc.next ? '<span><i class="pred-key"></i>Predicted</span>' : ''}</div>
+    <div class="mlegend">${[1, 2, 3, 4, 5].map((i) => `<span>${moodFace(i, 18)}${MOOD_NAMES[i]}</span>`).join('')}<span>${DROP}Period</span><span><i class="pdot"></i>PMS symptoms</span>${cyc.next ? '<span><i class="pred-key"></i>Predicted period</span><span><i class="pmsw-key"></i>PMS window</span>' : ''}</div>
     <div class="small muted" style="text-align:center;margin-top:6px">${logged.length ? `${plural(logged.length, 'day')} logged · average <b>${MOOD_NAMES[Math.round(a)]}</b> (${a.toFixed(1)})` : 'Tap a day to fill it in'}</div>
   </section>`;
 }
 
 function moodHero() {
   const day = moodDay(), e = db.moods[day], label = moodDayLabel(day);
-  const pose = !e ? 'wave' : e.mood >= 5 ? 'victory' : e.mood >= 4 ? 'flex' : e.mood >= 3 ? 'wave' : 'nap';
+  const pose = !e || !e.mood ? 'wave' : e.mood >= 5 ? 'victory' : e.mood >= 4 ? 'flex' : e.mood >= 3 ? 'wave' : 'nap';
   const chips = e ? [
-    e.sleep != null ? `${e.sleep} h sleep${e.sleepQ ? ` · ${SLEEP_Q[e.sleepQ].toLowerCase()}` : ''}` : '',
-    e.period ? `Period · ${FLOW[e.period].toLowerCase()}` : '',
-    e.out === true ? 'Left the house' : e.out === false ? 'Stayed in' : '',
-    e.social ? SOCIAL[e.social] : '', ...(e.tags || []),
+    e.sleep != null || e.sleepScore != null ? `Sleep ${e.sleep != null ? `${e.sleep} h` : ''}${e.sleepScore != null ? ` · ${e.sleepScore}/10` : ''}` : '',
+    e.period ? `Period · ${FLOW[e.period].toLowerCase()}` : '', pmsDay(e) ? `PMS${e.pms ? ` · ${PMS_LEVEL[e.pms].toLowerCase()}` : ''}` : '',
+    e.out === true ? 'Left the house' : e.out === false ? 'Stayed in' : '', ...(e.move || []),
+    e.social ? SOCIAL[e.social] : '', ...(e.tags || []), ...(e.feel || []),
   ].filter(Boolean) : [];
   return `<section class="card m-hero">
     <div class="m-buddy">${ART.buddy({ m: .4, j: .3, pose, size: 120 })}</div>
-    <div>
-      <div class="m-head"><div class="eyebrow">Nightly check-in</div>
-      ${e ? `<div class="row" style="gap:10px;margin:2px 0 8px">${moodFace(e.mood, 44)}<h2 style="margin:0">${MOOD_NAMES[e.mood]} ${label}</h2></div></div>
-        <div class="mchips">${chips.map((c) => `<span>${esc(c)}</span>`).join('')}</div>
-        ${e.note ? `<p class="small" style="margin:8px 0 0">“${esc(e.note)}”</p>` : ''}
-        <button class="btn sm m-light" style="margin-top:12px" data-act="mood-day" data-d="${day}">Edit</button>`
+    <div class="m-head"><div class="eyebrow">Nightly check-in</div>
+    ${e ? `<div class="row" style="gap:10px;margin:2px 0 8px">${e.mood ? moodFace(e.mood, 44) : ''}<h2 style="margin:0">${e.mood ? `${MOOD_NAMES[e.mood]} ${label}` : `Logged ${label}`}</h2></div></div>
+      <div class="mchips">${chips.slice(0, 10).map((c) => `<span>${esc(c)}</span>`).join('')}${chips.length > 10 ? `<span>+${chips.length - 10}</span>` : ''}</div>
+      <button class="btn sm m-light" style="margin-top:12px" data-act="mood-day" data-d="${day}">Edit check-in</button>`
     : `<h2>How was ${label}?</h2></div>
-        <div class="mpick">${[1, 2, 3, 4, 5].map((i) => `<button data-act="mood-day" data-d="${day}" data-m="${i}" aria-label="${MOOD_NAMES[i]}">${moodFace(i, 40)}<span>${MOOD_NAMES[i]}</span></button>`).join('')}</div>`}
-    </div></section>`;
+      <div class="m-steps">${CARDS.map(([, l], i) => `<span>${i + 1}. ${l}</span>`).join('')}</div>
+      <button class="btn big m-light" style="margin-top:12px" data-act="mood-day" data-d="${day}">Start check-in</button>
+      <div class="small" style="opacity:.8;margin-top:8px;text-align:center">Skip any card that doesn’t apply</div>`}
+    </section>`;
 }
 
 views.mood = () => {
   const days = Object.keys(db.moods).filter((k) => db.moods[k].mood);
   const yest = addDays(isoDay(Date.now()), -1);
-  const missed = moodDay() !== yest && !db.moods[yest] && days.length
+  const missed = moodDay() !== yest && !db.moods[yest] && Object.keys(db.moods).length
     ? `<button class="card m-missed" data-act="mood-day" data-d="${yest}"><b class="grow">You missed yesterday — fill it in?</b><span class="chev faint">${ICON.chev}</span></button>` : '';
   const cyc = cycleInfo(), tk = isoDay(Date.now()), ph = cyc.phase(tk);
+  const toPms = cyc.pmsFrom ? dayDiff(tk, cyc.pmsFrom) : null;
   const cycleCard = cyc.last ? `<section class="card mcycle">
       <div class="row"><div class="grow"><div class="eyebrow">Cycle</div>
         <b style="font-size:18px">${ph ? PHASES[ph] : 'Waiting for your next period'}</b>
-        <div class="small muted">Day ${dayDiff(cyc.last, tk) + 1} · ${cyc.measured ? `your cycle averages ${cyc.len} days` : 'assuming a 28-day cycle until 2 periods are logged'}</div></div>
+        <div class="small muted">Day ${dayDiff(cyc.last, tk) + 1} · ${cyc.measured ? `your cycle averages ${cyc.len} days` : 'assuming 28 days until 2 periods are logged'}</div></div>
         <div class="mc-next"><small>Next period</small><b>${dayDiff(tk, cyc.next) >= 0 ? shortDate(parseDay(cyc.next)) : 'Due'}</b><small>${dayDiff(tk, cyc.next) > 0 ? `in ${plural(dayDiff(tk, cyc.next), 'day')}` : ''}</small></div></div>
-      ${ph ? `<p class="small muted" style="margin:8px 0 0">${PHASE_NOTE[ph]}</p>` : ''}</section>`
-    : `<section class="card small muted mcycle">Log period flow in your check-ins and Gym Log will work out your cycle, predict the next period and show how each phase affects your mood.</section>`;
+      ${toPms != null && toPms > 0 && toPms <= 3 ? `<p class="pms-warn">Heads up: your PMS window usually starts in ${plural(toPms, 'day')} (${shortDate(parseDay(cyc.pmsFrom))}). Mood swings around then are likely hormonal.</p>`
+    : ph ? `<p class="small muted" style="margin:8px 0 0">${PHASE_NOTE[ph]}</p>` : ''}
+      <p class="small muted" style="margin:6px 0 0">PMS usually starts <b>${plural(cyc.onset, 'day')}</b> before your period — ${cyc.learned ? `learned from ${plural(cyc.learned, 'cycle')} of symptoms you logged` : 'a starting guess; log PMS symptoms and it learns your real pattern'}.</p></section>`
+    : `<section class="card small muted mcycle">Log your period flow and PMS symptoms on the Cycle card each night. Gym Log will learn your cycle and how many days before your period your mood swings start, then warn you ahead of time.</section>`;
 
   let insights;
   if (days.length < 7) {
     insights = `<section class="card"><b>What affects your mood</b>
-      <p class="small muted" style="margin:4px 0 10px">Unlocks after 7 check-ins — ${plural(7 - days.length, 'more day')} to go. Patterns get clearer the longer you log.</p>
+      <p class="small muted" style="margin:4px 0 10px">Unlocks after 7 check-ins with a mood — ${plural(7 - days.length, 'more day')} to go. Patterns get clearer the longer you log.</p>
       <div class="lvl"><i style="width:${(days.length / 7) * 100}%"></i></div></section>`;
   } else {
     const F = moodFactors(), up = F.filter((f) => f.diff > 0), dn = F.filter((f) => f.diff < 0), top = F[0];
     const sleepRows = [['Under 6 h', (e) => e.sleep < 6], ['6–7 h', (e) => e.sleep >= 6 && e.sleep < 7], ['7–8 h', (e) => e.sleep >= 7 && e.sleep < 8], ['8 h +', (e) => e.sleep >= 8]]
       .map(([l, t]) => { const v = days.filter((k) => db.moods[k].sleep != null && t(db.moods[k])).map((k) => db.moods[k].mood); return [l, avg(v), v.length]; });
+    const SF = sleepFactors();
     const phaseRows = Object.keys(PHASES).map((p) => { const v = days.filter((k) => cyc.phase(k) === p).map((k) => db.moods[k].mood); return [PHASES[p], avg(v), v.length]; });
     insights = `
       ${top ? `<section class="card m-top"><div class="eyebrow">Biggest effect so far</div>
@@ -2382,8 +2462,9 @@ views.mood = () => {
     : '<section class="card small muted">No clear patterns yet — keep tagging your days.</section>'}
       ${up.length ? `<div class="section-title">Lifts you up</div><section class="card">${factorRows(up.slice(0, 6))}</section>` : ''}
       ${dn.length ? `<div class="section-title">Brings you down</div><section class="card">${factorRows(dn.slice(0, 6))}</section>` : ''}
-      <div class="section-title">Sleep &amp; mood</div><section class="card"><div class="small muted" style="margin-bottom:8px">Average mood by sleep the night before</div>${moodBars(sleepRows)}</section>
-      ${cyc.last ? `<div class="section-title">Cycle &amp; mood</div><section class="card"><div class="small muted" style="margin-bottom:8px">Average mood in each phase</div>${moodBars(phaseRows)}</section>` : ''}
+      <div class="section-title">Sleep &amp; mood</div><section class="card"><div class="small muted" style="margin-bottom:8px">Average mood by hours slept the night before</div>${moodBars(sleepRows)}</section>
+      ${SF.length ? `<div class="section-title">What affects your sleep</div><section class="card">${factorRows(SF.slice(0, 6), 'Sleep score')}</section>` : ''}
+      ${cyc.last ? `<div class="section-title">Cycle &amp; mood</div><section class="card"><div class="small muted" style="margin-bottom:8px">Average mood in each phase</div>${moodBars(phaseRows)}</section>${pmsInsight(cyc)}` : ''}
       <p class="small muted" style="margin:10px 4px">Based on ${plural(days.length, 'check-in')}. These are patterns, not proof — they firm up as you log more days. Each needs 3+ days with and without it.</p>`;
   }
   return {
@@ -2395,65 +2476,142 @@ views.mood = () => {
         <button class="btn sm soft" data-act="mood-ics">Add alert</button></div></section>`,
   };
 };
-const fmtTime = (hm) => { if (!hm || hm === '00:00') return 'midnight'; const [h, m] = String(hm || '00:00').split(':').map(Number); return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); };
 
-function moodModal(day, preset) {
+/** The check-in: six cards, one at a time. Each has its own note and can be skipped. */
+function moodModal(day) {
   const prev = db.moods[day];
-  const e = prev ? clone(prev) : { mood: preset || 0, sleep: null, sleepQ: null, period: null, out: null, social: null, tags: [], note: '' };
-  if (preset) e.mood = preset;
-  if (!prev) { // carry an ongoing period forward as a suggestion
+  const e = prev ? clone(prev) : {};
+  ['sleepTags', 'pmsTags', 'move', 'tags', 'feel'].forEach((k) => { if (!Array.isArray(e[k])) e[k] = []; });
+  if (!e.notes) e.notes = e.note ? { mood: e.note } : {};
+  delete e.note;
+  const cyc = cycleInfo();
+  if (!prev) { // suggestions from what Gym Log already knows
     const y = db.moods[addDays(day, -1)];
-    if (y && y.period >= 2 && cycleInfo().phase(day) === 'period') e.period = y.period;
-    if (workedOut(day)) e.out = true;
+    if (y && y.period >= 2 && cyc.phase(day) === 'period') e.period = y.period;
+    daySessions(day).forEach((s) => {
+      const k = kindOf(s), t = k === 'pt' ? 'PT session' : k === 'class' ? 'Class' : k === 'cardio' || k === 'jog' ? 'Jog / run' : 'Gym workout';
+      if (!e.move.includes(t)) e.move.push(t);
+    });
+    if (e.move.length) e.out = true;
   }
-  const one = (k, v, label, extra = '') => `<button class="fchip" data-act="m:one" data-k="${k}" data-v="${v}" aria-pressed="${e[k] === v}"${extra}>${label}</button>`;
-  const allTags = MOOD_TAGS.concat(db.moodTags.length ? [['Yours', db.moodTags]] : []);
-  const tagChip = (t) => `<button class="fchip sm" data-act="m:tag" data-t="${esc(t)}" aria-pressed="${e.tags.includes(t)}">${esc(t)}</button>`;
-  openModal(`
-    <div class="row"><h3 class="grow">How was ${moodDayLabel(day)}?</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
-    <p class="small muted" style="margin:0">${fmtDate(parseDay(day), true)}${workedOut(day) ? ' · you worked out' : ''}</p>
-    <div class="mpick in-sheet" data-group="mood">${[1, 2, 3, 4, 5].map((i) => `<button data-act="m:one" data-k="mood" data-v="${i}" aria-pressed="${e.mood === i}" aria-label="${MOOD_NAMES[i]}">${moodFace(i, 42)}<span>${MOOD_NAMES[i]}</span></button>`).join('')}</div>
-    <div class="mq"><b>Sleep the night before</b>
-      <div class="fchips" data-group="sleep">${[4, 5, 6, 7, 8, 9, 10].map((h) => one('sleep', h, `${h === 4 ? '≤4' : h === 10 ? '10+' : h} h`)).join('')}</div>
-      <div class="fchips" data-group="sleepQ">${[1, 2, 3].map((q) => one('sleepQ', q, `${SLEEP_Q[q]} sleep`)).join('')}</div></div>
-    <div class="mq"><b>Period</b><div class="fchips" data-group="period">${FLOW.map((f, i) => one('period', i, f)).join('')}</div></div>
-    <div class="mq"><b>Left the house?</b><div class="fchips" data-group="out">${one('out', true, 'Yes')}${one('out', false, 'No, stayed in')}</div></div>
-    <div class="mq"><b>Social interaction</b><div class="fchips" data-group="social">${Object.entries(SOCIAL).map(([k, l]) => one('social', k, l)).join('')}</div></div>
-    ${allTags.map(([g, ts]) => `<div class="mq"><b>${esc(g)}</b><div class="fchips" data-tags="${esc(g)}">${ts.map(tagChip).join('')}</div></div>`).join('')}
-    <div class="mq"><b>Add your own tag</b><div class="row"><input class="field grow" id="mt-new" placeholder="e.g. Therapy, Rainy day" maxlength="28"><button class="btn sm soft" data-act="m:newtag">Add</button></div></div>
-    <div class="mq"><b>Note</b><textarea class="field" id="m-note" rows="2" placeholder="Anything else? (optional)">${esc(e.note || '')}</textarea></div>
-    <div class="actions">${prev ? '<button class="btn danger" data-act="m:del">Delete</button><span class="grow"></span>' : '<button class="btn" data-act="m:close">Cancel</button>'}<button class="btn primary" data-act="m:save">Save check-in</button></div>`,
-  {
+  let step = 0;
+  // Skip = leave this card as it was before the check-in opened (drops suggestions on a new day)
+  const orig = prev ? clone(e) : { sleepTags: [], pmsTags: [], move: [], tags: [], feel: [], notes: {} };
+  const CARD_FIELDS = { sleep: ['sleep', 'bed', 'wake', 'sleepScore', 'sleepTags'], cycle: ['period', 'pms', 'pmsTags'], move: ['out', 'outTime', 'move'], people: ['social'], day: [], mood: ['mood', 'feel'] };
+  const CARD_TAGS = { move: ['out'], people: ['people'], day: ['day', 'food', 'body'] };
+  const groupList = (g) => (g === 'out' ? OUT_TAGS : g === 'people' ? PEOPLE_TAGS : g === 'day' ? DAY_TAGS[0][1] : g === 'food' ? DAY_TAGS[1][1] : DAY_TAGS[2][1]).concat(customTags(g));
+  const resetCard = (key) => {
+    CARD_FIELDS[key].forEach((f) => { e[f] = orig[f] === undefined ? (Array.isArray(e[f]) ? [] : null) : clone(orig[f]); });
+    (CARD_TAGS[key] || []).forEach((g) => { const l = groupList(g); e.tags = e.tags.filter((t) => !l.includes(t)).concat((orig.tags || []).filter((t) => l.includes(t))); });
+    if (orig.notes && orig.notes[key]) e.notes[key] = orig.notes[key]; else delete e.notes[key];
+  };
+  const one = (k, v, label) => `<button class="fchip" data-act="m:one" data-k="${k}" data-v="${v}" aria-pressed="${e[k] === v}">${label}</button>`;
+  const chips = (key, list, sm = true) => list.map((t) => `<button class="fchip${sm ? ' sm' : ''}" data-act="m:tag" data-key="${key}" data-t="${esc(t)}" aria-pressed="${e[key].includes(t)}">${esc(t)}</button>`).join('');
+  const tagGroup = (title, key, list, g) => `<div class="mq"><b>${title}</b><div class="fchips" data-g="${g}">${chips(key, list.concat(customTags(g).filter((t) => !list.includes(t))))}</div>
+    <div class="row add-tag"><input class="field grow" data-new="${g}" data-key="${key}" placeholder="Add your own" maxlength="28"><button class="btn sm soft" data-act="m:newtag" data-g="${g}">Add</button></div></div>`;
+  const noteBox = (card) => `<div class="mq"><b>Notes</b><textarea class="field" data-note="${card}" rows="2" placeholder="Anything else about this? (optional)">${esc(e.notes[card] || '')}</textarea></div>`;
+
+  const sleepWhy = () => {
+    const s = e.sleepScore;
+    if (s == null) return '<p class="small muted">Rate your sleep to tag what affected it.</p>';
+    const bad = tagGroup(s <= 4 ? 'What made it bad?' : 'Anything that disturbed it?', 'sleepTags', SLEEP_BAD, 'sleepBad');
+    const good = tagGroup(s >= 7 ? 'What helped?' : 'Anything that helped?', 'sleepTags', SLEEP_GOOD, 'sleepGood');
+    return s <= 4 ? bad : s >= 7 ? good : bad + good;
+  };
+  const scoreWord = (s) => (s == null ? 'Slide to rate' : s <= 2 ? 'Terrible' : s <= 4 ? 'Bad' : s <= 6 ? 'OK' : s <= 8 ? 'Good' : 'Amazing');
+  const body = {
+    sleep: () => `<h3>How did you sleep?</h3><p class="small muted">The night before ${moodDayLabel(day)}.</p>
+      <div class="mq"><div class="row"><b class="grow">Hours slept</b><span class="big-val" id="sl-h">${e.sleep == null ? '—' : `${e.sleep} h`}</span></div>
+        <input type="range" class="mrange" min="0" max="12" step="0.5" value="${e.sleep ?? 7}" data-f="sleep" aria-label="Hours slept"></div>
+      <div class="row mq" style="gap:12px"><div class="grow"><label class="lbl">Went to sleep</label><input type="time" class="field" data-f="bed" value="${e.bed || ''}"></div>
+        <div class="grow"><label class="lbl">Woke up</label><input type="time" class="field" data-f="wake" value="${e.wake || ''}"></div></div>
+      <div class="mq"><div class="row"><b class="grow">Sleep score</b><span class="big-val" id="sl-s">${e.sleepScore == null ? '' : `${e.sleepScore}/10 · `}<small>${scoreWord(e.sleepScore)}</small></span></div>
+        <input type="range" class="mrange score" min="1" max="10" step="1" value="${e.sleepScore ?? 6}" data-f="sleepScore" aria-label="Sleep score out of 10">
+        <div class="range-ends"><span>Terrible</span><span>Amazing</span></div></div>
+      <div id="sl-why">${sleepWhy()}</div>${noteBox('sleep')}`,
+    cycle: () => {
+      const ph = cyc.phase(day), ns = cyc.next ? dayDiff(day, cyc.next) : null;
+      const ctx = ph === 'pre' ? `You’re in your usual PMS window${ns != null && ns >= 0 ? ` — period expected in about ${plural(ns, 'day')}` : ''}.`
+        : ns != null && ns >= 0 && ns <= 14 ? `Period expected in about ${plural(ns, 'day')}.` : cyc.last ? `Cycle day ${dayDiff(cyc.last, day) + 1}.` : 'Log flow when your period comes so Gym Log can learn your cycle.';
+      return `<h3>Cycle &amp; PMS</h3><p class="small muted">${ctx}</p>
+      <div class="mq"><b>Period flow</b><div class="fchips" data-group="period">${FLOW.map((f, i) => one('period', i, f)).join('')}</div></div>
+      <div class="mq"><b>PMS / pre-period symptoms</b><p class="small muted" style="margin:2px 0 0">Log these even when your period isn’t here yet — that’s how Gym Log learns how early your mood swings start.</p>
+        <div class="fchips" data-g="pms">${chips('pmsTags', PMS_TAGS.concat(customTags('pms')))}</div>
+        <div class="row add-tag"><input class="field grow" data-new="pms" data-key="pmsTags" placeholder="Add your own" maxlength="28"><button class="btn sm soft" data-act="m:newtag" data-g="pms">Add</button></div></div>
+      <div class="mq"><b>How strong were the symptoms?</b><div class="fchips" data-group="pms">${PMS_LEVEL.map((l, i) => one('pms', i, l)).join('')}</div></div>${noteBox('cycle')}`;
+    },
+    move: () => `<h3>Out &amp; moving</h3>${workedOut(day) ? '<p class="small muted">Workouts you logged in Gym Log are already ticked.</p>' : ''}
+      <div class="mq"><b>Did you leave the house?</b><div class="fchips" data-group="out">${one('out', true, 'Yes')}${one('out', false, 'No, stayed in')}</div></div>
+      <div class="mq"><b>Time outside</b><div class="fchips" data-group="outTime">${OUT_TIME.map((l, i) => one('outTime', i, l)).join('')}</div></div>
+      ${tagGroup('Movement', 'move', MOVE_TAGS, 'move')}${tagGroup('Out and about', 'tags', OUT_TAGS, 'out')}${noteBox('move')}`,
+    people: () => `<h3>People</h3>
+      <div class="mq"><b>Social interaction</b><div class="fchips" data-group="social">${Object.entries(SOCIAL).map(([k, l]) => one('social', k, l)).join('')}</div></div>
+      ${tagGroup('Who / what happened', 'tags', PEOPLE_TAGS, 'people')}${noteBox('people')}`,
+    day: () => `<h3>Your day</h3>${DAY_TAGS.map(([g, list]) => tagGroup(g, 'tags', list, g === 'Doing' ? 'day' : g === 'Body' ? 'body' : 'food')).join('')}${noteBox('day')}`,
+    mood: () => `<h3>Overall, how was ${moodDayLabel(day)}?</h3>
+      <div class="mpick in-sheet">${[1, 2, 3, 4, 5].map((i) => `<button data-act="m:one" data-k="mood" data-v="${i}" aria-pressed="${e.mood === i}" aria-label="${MOOD_NAMES[i]}">${moodFace(i, 42)}<span>${MOOD_NAMES[i]}</span></button>`).join('')}</div>
+      ${tagGroup('Feelings', 'feel', FEEL_TAGS, 'feel')}${noteBox('mood')}`,
+  };
+  const has = {
+    sleep: () => e.sleep != null || e.sleepScore != null || e.bed || e.sleepTags.length, cycle: () => e.period != null || e.pms != null || e.pmsTags.length,
+    move: () => e.out != null || e.outTime != null || e.move.length, people: () => e.social != null || PEOPLE_TAGS.some((t) => e.tags.includes(t)),
+    day: () => DAY_TAGS.some(([, l]) => l.some((t) => e.tags.includes(t))), mood: () => !!e.mood,
+  };
+  const draw = () => {
+    const [key] = CARDS[step], last = step === CARDS.length - 1;
+    const sheet = $('#modal .sheet');
+    sheet.innerHTML = `<div class="row mw-top"><div class="mdots grow">${CARDS.map(([k, l], i) => `<button class="${i === step ? 'on' : ''}${has[k]() ? ' done' : ''}" data-act="m:goto" data-i="${i}" aria-label="${l}"></button>`).join('')}</div>
+        <span class="small muted">${step + 1} / ${CARDS.length}</span><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
+      <div class="eyebrow">${fmtDate(parseDay(day), true)} · ${CARDS[step][1]}</div>
+      ${body[key]()}
+      <div class="actions mw-nav">${step ? '<button class="btn" data-act="m:bk">Back</button>' : (prev ? '<button class="btn danger" data-act="m:del">Delete</button>' : '')}
+        <span class="grow"></span>${last ? '' : '<button class="btn ghost" data-act="m:skip">Skip</button>'}
+        <button class="btn primary" data-act="${last ? 'm:save' : 'm:fwd'}">${last ? 'Save check-in' : 'Next'}</button></div>`;
+    sheet.scrollTop = 0;
+  };
+  const autoSleep = () => {
+    const b = hmMin(e.bed), w = hmMin(e.wake); if (b == null || w == null) return;
+    e.sleep = Math.round((((w - b + 1440) % 1440) / 60) * 2) / 2;
+    const r = $('#modal [data-f="sleep"]'); if (r) r.value = e.sleep;
+    $('#sl-h').textContent = `${e.sleep} h`;
+  };
+  openModal('', {
     close: closeModal,
+    goto: (el) => { step = +el.dataset.i; draw(); },
+    fwd: () => { step += 1; draw(); },
+    skip: () => { resetCard(CARDS[step][0]); step += 1; draw(); },
+    bk: () => { step -= 1; draw(); },
     one: (el) => {
       const k = el.dataset.k, raw = el.dataset.v, v = raw === 'true' ? true : raw === 'false' ? false : /^\d+$/.test(raw) ? +raw : raw;
       e[k] = e[k] === v && k !== 'mood' ? null : v; // tap again to clear
+      if (k === 'out' && v === false) e.outTime = null;
       el.parentElement.querySelectorAll('[data-act="m:one"]').forEach((b) => b.setAttribute('aria-pressed', String(b === el && e[k] != null)));
     },
     tag: (el) => {
-      const t = el.dataset.t, i = e.tags.indexOf(t);
-      if (i >= 0) e.tags.splice(i, 1); else e.tags.push(t);
+      const arr = e[el.dataset.key], t = el.dataset.t, i = arr.indexOf(t);
+      if (i >= 0) arr.splice(i, 1); else arr.push(t);
       el.setAttribute('aria-pressed', String(i < 0));
+      if (el.dataset.key === 'move' && i < 0 && t !== 'Just rested' && e.out == null && !/Gym|PT|Class|Yoga/.test(t)) {
+        e.out = true; const y = $('#modal [data-k="out"][data-v="true"]'); if (y) y.setAttribute('aria-pressed', 'true');
+      }
     },
-    newtag: () => {
-      const inp = $('#mt-new'), t = inp.value.trim().replace(/\s+/g, ' ');
+    newtag: (el) => {
+      const g = el.dataset.g, inp = $(`#modal [data-new="${g}"]`), key = inp.dataset.key, t = inp.value.trim().replace(/\s+/g, ' ');
       if (!t) return;
-      const known = MOOD_TAGS.flatMap(([, ts]) => ts).concat(db.moodTags).find((x) => x.toLowerCase() === t.toLowerCase());
-      const name = known || t;
-      if (!known) { db.moodTags.push(name); save(); }
-      if (!e.tags.includes(name)) e.tags.push(name);
-      let box = $(`#modal [data-tags="Yours"]`);
-      if (!known) {
-        if (!box) { inp.closest('.mq').insertAdjacentHTML('beforebegin', '<div class="mq"><b>Yours</b><div class="fchips" data-tags="Yours"></div></div>'); box = $(`#modal [data-tags="Yours"]`); }
-        box.insertAdjacentHTML('beforeend', tagChip(name));
-      } else { const b = [...document.querySelectorAll('#modal [data-act="m:tag"]')].find((x) => x.dataset.t === name); if (b) b.setAttribute('aria-pressed', 'true'); }
+      const box = $(`#modal [data-g="${g}"]`);
+      const existing = [...box.querySelectorAll('[data-act="m:tag"]')].find((b) => b.dataset.t.toLowerCase() === t.toLowerCase());
+      const name = existing ? existing.dataset.t : t;
+      if (!existing) { db.moodTags.push({ t: name, g }); save(); box.insertAdjacentHTML('beforeend', chips(key, [name])); }
+      if (!e[key].includes(name)) e[key].push(name);
+      const b = [...box.querySelectorAll('[data-act="m:tag"]')].find((x) => x.dataset.t === name); if (b) b.setAttribute('aria-pressed', 'true');
       inp.value = '';
     },
     save: () => {
-      if (!e.mood) { toast('Pick how the day felt'); return; }
-      e.note = $('#m-note').value.trim(); e.at = localISO();
-      db.moods[day] = e; save(); closeModal();
-      toast(e.mood >= 4 ? 'Saved — glad it was a good one' : e.mood <= 2 ? 'Saved — tomorrow’s a fresh start' : 'Check-in saved');
+      Object.keys(e.notes).forEach((k) => { if (!e.notes[k]) delete e.notes[k]; });
+      const empty = !Object.keys(has).some((k) => has[k]()) && !Object.keys(e.notes).length;
+      if (empty) { toast('Nothing filled in yet'); return; }
+      e.at = localISO(); db.moods[day] = e; save(); closeModal();
+      toast(!e.mood ? 'Check-in saved' : e.mood >= 4 ? 'Saved — glad it was a good one' : e.mood <= 2 ? 'Saved — tomorrow’s a fresh start' : 'Check-in saved');
       render();
     },
     del: async () => {
@@ -2461,6 +2619,23 @@ function moodModal(day, preset) {
       delete db.moods[day]; save(); closeModal(); render();
     },
   });
+  const sheet = $('#modal .sheet');
+  sheet.classList.add('mwiz');
+  sheet.addEventListener('input', (ev) => {
+    const el = ev.target;
+    if (el.dataset.note) { e.notes[el.dataset.note] = el.value.trim(); return; }
+    const f = el.dataset.f; if (!f) return;
+    if (f === 'sleep') { e.sleep = +el.value; $('#sl-h').textContent = `${e.sleep} h`; }
+    if (f === 'bed' || f === 'wake') { e[f] = el.value || null; autoSleep(); }
+    if (f === 'sleepScore') {
+      const before = e.sleepScore == null ? -1 : e.sleepScore <= 4 ? 0 : e.sleepScore >= 7 ? 2 : 1;
+      e.sleepScore = +el.value;
+      $('#sl-s').innerHTML = `${e.sleepScore}/10 · <small>${scoreWord(e.sleepScore)}</small>`;
+      const after = e.sleepScore <= 4 ? 0 : e.sleepScore >= 7 ? 2 : 1;
+      if (before !== after) $('#sl-why').innerHTML = sleepWhy();
+    }
+  });
+  draw();
 }
 
 /** Calendar file: a daily alert at the chosen time (default midnight) that opens the Mood tab. */
@@ -2472,7 +2647,7 @@ function moodIcs() {
   const url = `${location.origin}${location.pathname}#mood`;
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Gym Log//EN', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT', 'UID:mood-checkin@gym-log', `DTSTAMP:${stamp}`,
     `DTSTART:${ymd}T${hm}`, 'DURATION:PT5M', 'RRULE:FREQ=DAILY', 'SUMMARY:Mood check-in', `URL:${url}`,
-    `DESCRIPTION:How was today? Tag your mood\\, sleep\\, period and what happened: ${url}`,
+    `DESCRIPTION:How was today? Log sleep\\, cycle\\, movement\\, people and mood: ${url}`,
     'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Mood check-in — how was today?', 'TRIGGER:PT0M', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'];
   const file = new File([lines.join('\r\n')], 'mood-check-in.ics', { type: 'text/calendar' });
   const href = URL.createObjectURL(file), a = document.createElement('a');
@@ -2707,7 +2882,7 @@ document.addEventListener('click', async (ev) => {
     case 'quick-add': quickAdd(); break;
     case 'buddy-tap': buddyPoke(t); break;
     case 'pt-log': ptLogModal(); break;
-    case 'mood-day': moodModal(t.dataset.d, t.dataset.m ? +t.dataset.m : 0); break;
+    case 'mood-day': moodModal(t.dataset.d); break;
     case 'mood-month': ui.moodMonth = Math.min(0, (ui.moodMonth || 0) + +t.dataset.d); renderView(); break;
     case 'mood-ics': moodIcs(); break;
     case 'mood-tag-del': db.moodTags.splice(+t.dataset.i, 1); save(); renderView(); break;
@@ -2972,7 +3147,7 @@ function importData(file) {
         });
         if (d.membership && !db.membership) db.membership = d.membership;
         if (d.moods && typeof d.moods === 'object') Object.keys(d.moods).forEach((k) => { if (!db.moods[k]) db.moods[k] = d.moods[k]; });
-        if (Array.isArray(d.moodTags)) d.moodTags.forEach((t) => { if (!db.moodTags.includes(t)) db.moodTags.push(t); });
+        if (Array.isArray(d.moodTags)) d.moodTags.forEach((x) => { const t = typeof x === 'string' ? { t: x, g: 'day' } : x; if (t && t.t && !db.moodTags.some((y) => y.t === t.t && y.g === t.g)) db.moodTags.push(t); });
         if (!keepRoutine) { db.routine = d.routine; if (d.plan) db.plan = d.plan; }
         save(); closeModal(); toast(`Imported ${fresh} workouts, ${freshScans} scans${upd ? `, updated ${upd}` : ''}`); render();
       },

@@ -1407,7 +1407,7 @@ function buddyBlock() {
   const asleep = !b.w.gym && !b.w.jogMin;
   const pose = asleep ? 'nap' : ui.cardPose || (ui.cardPose = pick([...LIFT_POSES, ...(b.w.jogMin ? RUN_POSES : [])]));
   return `<div class="q-buddy">
-    <button class="buddy-btn" data-act="buddy-tap" aria-label="Poke Buddy">${ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose, size: 162 })}</button>
+    <button class="buddy-btn" data-act="buddy-tap" aria-label="Poke Buddy">${ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose, size: 200 })}</button>
     <div class="bd-side">
       <div class="bd-bubble" id="bd-say" aria-live="polite">${buddyLines(b)[(ui.pokes || 0) % 2]}</div>
       <div class="bd-meter" role="img" aria-label="Muscle power ${b.w.gym} of ${b.st.liftMax} lifts"><span class="il">${ART.lift(22)}</span>${pips(b.w.gym, b.st.liftMax)}</div>
@@ -1423,7 +1423,7 @@ function buddyPoke(btn) {
   if (say) { say.textContent = giggle ? 'Hehe, that tickles!' : lines[ui.pokes % lines.length]; say.classList.remove('pop'); void say.offsetWidth; say.classList.add('pop'); }
   // new pose on every poke
   ui.cardPose = nextPose([...LIFT_POSES, ...(b.w.jogMin ? RUN_POSES : [])]);
-  btn.innerHTML = ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose: ui.cardPose, size: 162 });
+  btn.innerHTML = ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose: ui.cardPose, size: 200 });
   POKE.forEach((c) => btn.classList.remove(c)); void btn.offsetWidth;
   btn.classList.add(giggle ? 'r-wiggle' : POKE[ui.pokes % POKE.length]);
   try { if (navigator.vibrate) navigator.vibrate(15); } catch (e) { /* ignore */ }
@@ -1889,7 +1889,7 @@ function bodyHero(s) {
       <div class="b-msg">${msg}</div>
       <div class="b-counts"><span class="b-c good"><b class="num">${good}</b> optimal</span><span class="b-c warn"><b class="num">${work}</b> to work on</span></div>
       <span class="b-next il">${ART.calendar(20)}Next scan ${nextScanText(s)}</span></div>
-    ${(() => { const b = buddyState(); return ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose: !b.w.gym && !b.w.jogMin ? 'nap' : mood === 'happy' ? pick(['victory', 'wave', 'flexOne']) : pick(['flex', 'lift']), size: 124 }); })()}
+    ${(() => { const b = buddyState(); return ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose: !b.w.gym && !b.w.jogMin ? 'nap' : mood === 'happy' ? pick(['victory', 'wave', 'flexOne']) : pick(['flex', 'lift']), size: 168 }); })()}
   </section>`;
 }
 function bodyView() {

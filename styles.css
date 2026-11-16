@@ -1062,3 +1062,14 @@ h1 { font-weight: 700; letter-spacing: -.02em; } .title, .hero h2, .b-msg { font
 .q-hero .q-score, .q-hero .q-score b, .q-hero b, .q-hero .small.muted b { color: var(--text) !important; }
 .b-hero .b-c { background: var(--surface-2) !important; color: var(--text) !important; border: 1.5px solid var(--edge); }
 .b-hero .b-c span, .b-hero .b-c { opacity: 1; }
+/* Buddy breaks out of the card for depth */
+.card.quest, .quest .q-hero, .b-hero { overflow: visible !important; }
+.card.quest { margin-top: 56px; }
+.q-buddy { margin-top: -84px; align-items: flex-end; }
+.q-buddy .buddy-btn { margin-left: -14px; }
+.q-buddy .bd-side { padding-bottom: 18px; }
+.b-hero { margin-top: 46px; padding-top: 18px; }
+.b-hero .buddy { margin: -78px -20px -18px -10px; align-self: flex-start; }
+.quest .q-hero { display: flex; flex-direction: column; }
+.quest .q-buddy { order: -1; margin-bottom: 4px; }
+.quest .q-hero > .row:first-child { margin-top: 2px; }

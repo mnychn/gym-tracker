@@ -1295,3 +1295,36 @@ img.buddy { -webkit-user-select: none; user-select: none; -webkit-user-drag: non
 .no-medal img { width: 86%; height: 86%; object-fit: contain; transform: translateY(6%); user-select: none; -webkit-user-select: none; }
 /* room for the running cat above the jog track */
 .road { margin-top: 44px; }
+
+/* ---------- scratch cards (replaced the medal shelf) ---------- */
+.quest .scratch { margin: 8px 14px 16px; }
+.scratch { position: relative; border-radius: 20px; overflow: hidden; min-height: 132px; box-shadow: 0 6px 18px rgba(60,40,140,.10); }
+.sc-face { display: flex; align-items: center; gap: 12px; padding: 14px 16px 14px 8px; min-height: 132px; box-sizing: border-box; background: var(--surface-2); }
+.sc-face.tone-lav { background: linear-gradient(135deg, #efe8ff, #e2d6ff); }
+.sc-face.tone-peach { background: linear-gradient(135deg, #fff1e4, #ffdcc4); }
+.sc-face.tone-mint { background: linear-gradient(135deg, #e5f8ee, #ccf0dc); }
+.sc-face.tone-sky { background: linear-gradient(135deg, #e6f2ff, #cfe4ff); }
+.sc-face.tone-pink { background: linear-gradient(135deg, #ffe9f0, #ffd3e0); }
+.sc-face.gold, .sc-face.tone-gold { background: linear-gradient(135deg, #fff6d8, #ffe08a 55%, #ffd1e6); box-shadow: inset 0 0 0 2px #f2c14e; }
+.sc-pic { flex: none; width: 96px; display: grid; place-items: center; }
+.sc-pic img { width: 92px; height: 92px; object-fit: contain; user-select: none; -webkit-user-select: none; pointer-events: none; }
+.sc-txt { min-width: 0; color: #2a2346; }
+.sc-kind { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #6a3de8; }
+.sc-face.gold .sc-kind { color: #b7791f; }
+.sc-title { font-size: 18px; font-weight: 800; line-height: 1.2; margin: 2px 0 4px; }
+.sc-body { font-size: 13.5px; line-height: 1.35; color: #4a4466; }
+canvas.sc-foil { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; transition: opacity .45s; }
+canvas.sc-foil.gone { opacity: 0; }
+.sc-skip { position: absolute; right: 10px; bottom: 8px; border: 0; border-radius: 99px; padding: 4px 10px; font: inherit; font-size: 11px; font-weight: 700; color: #fff; background: rgba(255,255,255,.22); }
+.scratch.done .sc-face { animation: sc-pop .5s cubic-bezier(.2,1.5,.4,1); }
+@keyframes sc-pop { from { transform: scale(.94); } to { transform: none; } }
+.scratch.locked { box-shadow: none; }
+.sc-foil-static { min-height: 132px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; padding: 12px;
+  background: repeating-linear-gradient(135deg, var(--surface-2) 0 14px, color-mix(in srgb, var(--surface-2) 70%, var(--line)) 14px 28px); border: 2px dashed var(--line); border-radius: 20px; color: var(--text-2); font-size: 13px; }
+.sc-foil-static b { font-size: 15px; color: var(--text); }
+.sc-lock { width: 64px; height: 64px; object-fit: contain; margin-bottom: 2px; opacity: .9; }
+.sc-album { display: grid; gap: 12px; margin-top: 12px; }
+.sc-al .sc-date { font-size: 12px; font-weight: 700; color: var(--text-3); margin: 0 0 4px 4px; }
+.sc-al .scratch { min-height: 0; }
+@media (prefers-reduced-motion: reduce) { .scratch.done .sc-face { animation: none; } }
+.q-shelf-l .lbl { white-space: nowrap; } .q-shelf-l .btn.sm { padding-left: 8px; padding-right: 8px; }

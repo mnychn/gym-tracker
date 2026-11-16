@@ -85,6 +85,7 @@ function defaults() {
     scans: [],
     moods: {},
     moodTags: [],
+    scratch: {},
     active: null,
     rest: null,
   };
@@ -99,6 +100,7 @@ function migrate(d) {
   if (!Array.isArray(d.scans)) d.scans = [];
   if (!d.moods || typeof d.moods !== 'object' || Array.isArray(d.moods)) d.moods = {};
   if (!Array.isArray(d.moodTags)) d.moodTags = [];
+  if (!d.scratch || typeof d.scratch !== 'object' || Array.isArray(d.scratch)) d.scratch = {};
   d.moodTags = d.moodTags.map((x) => (typeof x === 'string' ? { t: x, g: 'day' } : x)).filter((x) => x && x.t);
   d.goals = { ...GOAL_DEFAULTS, ...(d.goals || {}) };
   if ((d.goalsV || 1) < 2) { d.goals.sessions = 3; d.goals.scanDays = 30; d.goalsV = 2; } // 3 lifting sessions/week, monthly scans
@@ -1057,12 +1059,216 @@ function jogRoad(w, st) {
     </div>
     <div class="jogscale">${flags.map((m) => `<span style="left:${X(m)}%">${m % 60 ? `${Math.round(m)}m` : `${m / 60}h`}</span>`).join('')}</div>`;
 }
-/** Last 6 weeks as a medal shelf. */
-function medalShelf(ws, g) {
-  const weeks = [6, 5, 4, 3, 2, 1].map((i) => { const s = ws - i * 7 * 864e5, w = weekStats(s), st = weekStars(w, g); return { s, w, st, m: medalOf(st) }; });
-  return `<div class="shelf">${weeks.map((x) => `<button class="shelf-c" data-act="week-detail" data-ws="${x.s}" aria-label="Week of ${shortDate(x.s)}: ${x.w.gym} lifts, ${x.w.jogMin} min jog, ${x.st.total} of ${x.st.max} stars. Show details">
-      <span class="shelf-m ${x.m ? '' : 'none'}">${medalArt(x.m, 34)}</span>
-      <span class="shelf-n num">${x.st.total}★</span><span class="shelf-d">${shortDate(x.s)}</span></button>`).join('')}</div>`;
+// ---------------------------------------------------------------- scratch cards (one per workout day, never repeats)
+const SCRATCH_KINDS = {
+  treat: ['Treat ticket', 'water'], fact: ['Body fact', 'press'], cat: ['Cat fact', 'nap'], cheer: ['Note from Buddy', 'curl'],
+  quest: ['Side quest', 'jumprope'], fortune: ['Gym fortune', 'boxing'],
+};
+const SCRATCH_POOL = [
+  ['treat', 'Mango sticky rice', 'Redeem for one mango sticky rice. Earned it, no guilt.'],
+  ['treat', 'Bubble tea', 'One bubble tea, your sweetness level, zero guilt.'],
+  ['treat', 'Lie-in pass', 'Good for 20 extra minutes in bed on a day you choose.'],
+  ['treat', 'Thai massage', 'Your muscles have asked for a massage. Book one this week.'],
+  ['treat', 'Comfort episode', 'One episode of your comfort show, feet up, phone down.'],
+  ['treat', 'Fancy coffee', 'The nice coffee, from the nice place. Take your time.'],
+  ['treat', 'Long hot shower', 'The good shower gel, the hot water, no rushing.'],
+  ['treat', 'Face mask night', 'Sheet mask, cosy clothes, early night.'],
+  ['treat', 'Skip a chore', 'Pick one chore and simply… don’t. Today it can wait.'],
+  ['treat', 'Fresh flowers', 'Buy yourself a small bunch of flowers for your desk.'],
+  ['treat', 'New playlist', 'Make a new gym playlist — first song is your victory song.'],
+  ['treat', 'Nap token', 'One guilt-free nap, any length, any day this week.'],
+  ['treat', 'Snack of choice', 'Your favourite snack, eaten slowly and enjoyed.'],
+  ['treat', 'Gym gear', 'Put a little something on your gym wishlist — socks, a hair tie, a bottle.'],
+  ['treat', 'Early night', 'Tonight: lights out 30 minutes early. Muscles grow while you sleep.'],
+  ['treat', 'Fruit platter', 'Cut up a whole plate of your favourite fruit and share it with no one.'],
+  ['fact', 'Built while you sleep', 'Most growth hormone is released in deep sleep — that’s when muscle repairs.'],
+  ['fact', 'Still working', 'After a weights session, muscle-building stays switched up for 24–48 hours.'],
+  ['fact', 'Brain gains', 'Early strength gains are mostly your brain learning to use more muscle fibres.'],
+  ['fact', 'Muscle memory', 'Muscle keeps extra nuclei from training, so strength comes back faster after a break.'],
+  ['fact', 'Biggest muscle', 'Your glutes are the largest muscle in your body. Every squat counts.'],
+  ['fact', 'Tiniest muscle', 'The smallest skeletal muscle, the stapedius, is in your ear and steadies a tiny bone.'],
+  ['fact', '600+ muscles', 'You have over 600 skeletal muscles. You trained a good chunk of them today.'],
+  ['fact', 'Stronger bones', 'Lifting weights makes bones denser — a long-term gift to future you.'],
+  ['fact', 'Muscle is busy', 'Muscle burns about three times more energy at rest than the same weight of fat.'],
+  ['fact', 'Tireless heart', 'Your heart is a muscle that beats about 100,000 times a day.'],
+  ['fact', 'Mostly water', 'Muscle is around 75% water — sip some now and say thanks.'],
+  ['fact', 'Brain fertiliser', 'Exercise boosts BDNF, a protein that helps brain cells grow and connect.'],
+  ['fact', 'Runner’s high', 'That post-run glow comes partly from endocannabinoids, not just endorphins.'],
+  ['fact', 'Strong grip', 'Grip strength is one of the best signs of healthy ageing. Hold on tight!'],
+  ['fact', 'After-dinner walk', 'A short walk after a meal helps smooth out blood-sugar spikes.'],
+  ['fact', 'Mood lift', 'Even one workout can lift mood and ease anxiety for hours afterwards.'],
+  ['fact', 'Sleep better', 'Regular exercise helps you fall asleep faster and sleep more deeply.'],
+  ['fact', 'Same gains', 'Women gain strength at a similar rate to men, relative to where they start.'],
+  ['cat', 'Professional napper', 'Cats sleep 12–16 hours a day. Buddy calls it “recovery”.'],
+  ['cat', 'A clowder', 'A group of cats is called a clowder. A group of gym cats is a swole-der.'],
+  ['cat', 'Ear workout', 'Cats have 32 muscles in each ear and can turn them 180°.'],
+  ['cat', 'Big jumps', 'A cat can jump about five to six times its body length.'],
+  ['cat', 'Purr power', 'A cat’s purr hums at around 25–150 Hz.'],
+  ['cat', 'Camel walk', 'Cats walk like camels and giraffes: both right legs, then both left.'],
+  ['cat', 'No sweet tooth', 'Cats can’t taste sweetness at all. More mango for you.'],
+  ['cat', 'Nose print', 'Every cat’s nose print is unique, like a fingerprint.'],
+  ['cat', 'Third eyelid', 'Cats have a third eyelid that sweeps across to protect the eye.'],
+  ['cat', 'Slow blink', 'A slow blink at a cat says “I trust you”. Try one at Buddy.'],
+  ['cat', 'Sweaty paws', 'Cats sweat through their paw pads — gym cats leave little prints.'],
+  ['cat', 'Speedy', 'A house cat can sprint at around 48 km/h for short bursts.'],
+  ['cat', 'Extra bones', 'Cats have about 230 bones; people have 206.'],
+  ['cat', 'Whisker ruler', 'A cat’s whiskers are about as wide as its body — a built-in tape measure.'],
+  ['cat', 'Self-care queen', 'Cats spend up to half their waking hours grooming. Rest is training too.'],
+  ['cat', 'Tiny purrs', 'Kittens can purr within their first week of life.'],
+  ['cheer', 'You showed up', 'Showing up is the hardest rep. You did it today.'],
+  ['cheer', 'Future you says thanks', 'Somewhere next year, a stronger you is grateful for today.'],
+  ['cheer', 'Proud of you', 'Buddy saw that. Buddy is very proud. Buddy is doing a little dance.'],
+  ['cheer', 'Consistency queen', 'It’s not one big workout — it’s days like today, stacked up.'],
+  ['cheer', 'Strong is a feeling', 'Notice how you feel right now. That’s what you’re building.'],
+  ['cheer', 'Quietly brave', 'Every set you didn’t want to start and did anyway — that’s courage.'],
+  ['cheer', 'One more brick', 'Today was one more brick in a very nice house.'],
+  ['cheer', 'Glow mode', 'Post-workout glow detected. Looking good.'],
+  ['cheer', 'Small wins', 'Small wins every day become the big win nobody saw coming.'],
+  ['cheer', 'Your pace', 'No race, no rush. Your pace is the right pace.'],
+  ['cheer', 'Rest counts', 'Rest well tonight — it’s part of the plan, not a break from it.'],
+  ['cheer', 'Paws up', 'High five from Buddy. Well, a high paw.'],
+  ['cheer', 'Unstoppable-ish', 'Not perfect, still going. That’s the secret.'],
+  ['cheer', 'Main character', 'Main-character energy: walked in, trained, walked out stronger.'],
+  ['cheer', 'Good choice', 'Out of everything you could have done today, you chose you.'],
+  ['quest', 'Water first', 'Tomorrow: a glass of water before your first coffee.'],
+  ['quest', 'Stair climber', 'Tomorrow: take the stairs once instead of the lift.'],
+  ['quest', 'Kettle squats', 'Next time the kettle boils: 10 slow squats.'],
+  ['quest', 'Hip opener', 'Before bed: two minutes of hip stretches.'],
+  ['quest', 'Gym selfie', 'Send a friend a gym selfie. Bragging is allowed.'],
+  ['quest', 'Evening stroll', 'Tonight or tomorrow: a 10-minute walk after dinner.'],
+  ['quest', 'Chorus plank', 'Hold a plank for one chorus of a song you love.'],
+  ['quest', 'Protein breakfast', 'Tomorrow: add some protein to breakfast — eggs, yoghurt or tofu.'],
+  ['quest', 'Posture check', 'Next time you sit down: shoulders back, chin tucked, three deep breaths.'],
+  ['quest', 'Sunshine', 'Get ten minutes of daylight tomorrow morning.'],
+  ['quest', 'Phone-free meal', 'Eat one meal tomorrow without your phone.'],
+  ['quest', 'Calf raises', 'While brushing your teeth: 20 calf raises.'],
+  ['quest', 'Thank your body', 'Name one thing your body did well today.'],
+  ['quest', 'Prep your bag', 'Pack your gym bag tonight so tomorrow-you has no excuses.'],
+  ['quest', 'Wall sit', 'Do a 30-second wall sit before your next shower.'],
+  ['quest', 'Deep breaths', 'Five slow breaths, four counts in, six counts out.'],
+  ['fortune', 'A PR approaches', 'A personal record is closer than you think.'],
+  ['fortune', 'Lucky set', 'Your third set next time will feel surprisingly easy.'],
+  ['fortune', 'Stronger soon', 'Within a month, something heavy will feel light.'],
+  ['fortune', 'Great sleep ahead', 'A deep, delicious sleep is in your near future.'],
+  ['fortune', 'Compliment incoming', 'Someone will notice you look strong. Say thank you.'],
+  ['fortune', 'Good news', 'The stars, and Buddy, predict a good week.'],
+  ['fortune', 'Energy rising', 'Your energy is on the up. Ride the wave.'],
+  ['fortune', 'New favourite', 'You’ll find a new favourite exercise soon.'],
+  ['fortune', 'Smooth sailing', 'Tomorrow’s workout will flow better than expected.'],
+  ['fortune', 'Golden week', 'A gold medal week is waiting for you.'],
+  ['fortune', 'Strong arms', 'Jars everywhere fear you. Soon they will open with ease.'],
+  ['fortune', 'Lucky number', 'Your lucky rep count this week is 8.'],
+];
+const SCRATCH_POSES = ['curl', 'press', 'row', 'bench', 'legpress', 'boxing', 'jumprope', 'treadmill', 'water', 'nap'];
+const SCRATCH_TONES = ['lav', 'peach', 'mint', 'sky', 'pink'];
+/** A fixed shuffle so cards come in a mixed order; ids are the pool index so new cards can be added later. */
+const SCRATCH_ORDER = (() => {
+  let a = 20260611; const rnd = () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const o = SCRATCH_POOL.map((_, i) => i);
+  for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; }
+  return o;
+})();
+const todayKey = () => isoDay(new Date());
+const workedOutOn = (key) => db.sessions.some((s) => isoDay(new Date(s.date)) === key);
+function scratchCardData(id) {
+  if (id >= 0 && SCRATCH_POOL[id]) {
+    const [kind, title, body] = SCRATCH_POOL[id];
+    const n = SCRATCH_ORDER.indexOf(id);
+    return { id, kind, label: SCRATCH_KINDS[kind][0], title, body, pose: n % 3 === 0 ? SCRATCH_KINDS[kind][1] : SCRATCH_POSES[(n * 7) % SCRATCH_POSES.length], tone: SCRATCH_TONES[n % SCRATCH_TONES.length], gold: n % 9 === 4 };
+  }
+  // the whole pool is collected: numbered bonus cards keep every day unique
+  const k = -id;
+  return { id, kind: 'cheer', label: 'Bonus card', title: `Collector #${k}`, body: `You’ve scratched every card in the deck — and kept going. ${plural(SCRATCH_POOL.length + k, 'workout day')} and counting.`, pose: SCRATCH_POSES[k % SCRATCH_POSES.length], tone: 'gold', gold: true };
+}
+/** Today's card, dealt once there's a workout logged today. */
+function scratchToday() {
+  const key = todayKey();
+  if (db.scratch[key]) return db.scratch[key];
+  if (!workedOutOn(key)) return null;
+  const used = new Set(Object.values(db.scratch).map((c) => c.id));
+  let id = SCRATCH_ORDER.find((i) => !used.has(i));
+  if (id == null) { id = -1; while (used.has(id)) id -= 1; }
+  db.scratch[key] = { id, revealed: false }; save();
+  return db.scratch[key];
+}
+function scratchFace(c, big) {
+  return `<div class="sc-face tone-${c.tone}${c.gold ? ' gold' : ''}">
+    <div class="sc-pic">${big || c.gold ? ART.buddy({ pose: c.pose, size: big ? 120 : 92 }) : `<img src="mascot/${({ treadmill: 'treadmill-run', press: 'overhead-press', curl: 'dumbbell-curl', row: 'cable-row', jumprope: 'jump-rope', boxing: 'punching-bag', bench: 'bench-press', legpress: 'leg-press', water: 'water-break', nap: 'sleeping' })[c.pose]}-still.webp" width="92" height="92" alt="">`}</div>
+    <div class="sc-txt"><div class="sc-kind">${c.gold ? '✦ Rare · ' : ''}${c.label}</div><div class="sc-title">${esc(c.title)}</div><div class="sc-body">${esc(c.body)}</div></div></div>`;
+}
+function scratchSection() {
+  const card = scratchToday(), got = Object.values(db.scratch).filter((x) => x.revealed).length;
+  const head = `<div class="row q-shelf-l"><span class="lbl grow">Today’s scratch card</span>
+    ${got ? `<button class="btn sm ghost" data-act="scratch-album">Album · ${got}</button>` : ''}
+    <button class="btn sm ghost" data-act="week-detail" data-ws="${weekStartOf(new Date())}">This week ›</button></div>`;
+  if (!card) {
+    return `${head}<div class="scratch locked"><div class="sc-foil-static"><img class="sc-lock" src="mascot/sleeping-still.webp" width="64" height="64" alt="">
+      <b>Log a workout today</b><span>to unlock a surprise underneath</span></div></div>`;
+  }
+  const c = scratchCardData(card.id);
+  return `${head}<div class="scratch${card.revealed ? ' done' : ''}" id="scratch" data-key="${todayKey()}">${scratchFace(c)}
+    ${card.revealed ? '' : '<canvas class="sc-foil" aria-label="Scratch card — rub to reveal" role="img"></canvas><button class="sc-skip" data-act="scratch-reveal">Reveal</button>'}</div>`;
+}
+/** Paint the foil and let a finger (or mouse) rub it off. */
+function mountScratch() {
+  const box = $('#scratch'), cv = box && box.querySelector('canvas.sc-foil');
+  if (!cv) return;
+  const r = box.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+  const g = cv.getContext('2d', { willReadFrequently: true });
+  g.scale(dpr, dpr);
+  const W = r.width, H = r.height;
+  const grad = g.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0, '#7c4dff'); grad.addColorStop(0.5, '#b18cff'); grad.addColorStop(1, '#f2799b');
+  g.fillStyle = grad; g.fillRect(0, 0, W, H);
+  // shimmer stripes + sparkles so it reads as foil
+  g.globalAlpha = 0.12; g.fillStyle = '#fff';
+  for (let x = -H; x < W; x += 22) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 10, 0); g.lineTo(x + 10 + H, H); g.lineTo(x + H, H); g.fill(); }
+  g.globalAlpha = 0.85; g.font = '14px sans-serif';
+  let s = 7; const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  for (let i = 0; i < 26; i++) g.fillText(rnd() > 0.5 ? '✦' : '★', rnd() * W, rnd() * H);
+  g.globalAlpha = 1; g.textAlign = 'center'; g.fillStyle = '#fff';
+  g.font = '800 22px Nunito, sans-serif'; g.fillText('Scratch me!', W / 2, H / 2 - 2);
+  g.font = '700 13px Nunito, sans-serif'; g.fillText('rub to reveal today’s surprise', W / 2, H / 2 + 20);
+  g.globalCompositeOperation = 'destination-out'; g.lineCap = 'round'; g.lineJoin = 'round'; g.lineWidth = 40;
+  let last = null, moves = 0, done = false;
+  const pt = (e) => { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+  const cleared = () => {
+    const d = g.getImageData(0, 0, cv.width, cv.height).data; let n = 0, t = 0;
+    for (let i = 3; i < d.length; i += 4 * 37) { t++; if (d[i] < 40) n++; }
+    return n / t;
+  };
+  const scratch = (e) => {
+    if (done) return;
+    const p = pt(e);
+    g.beginPath(); if (last) { g.moveTo(last[0], last[1]); g.lineTo(p[0], p[1]); g.stroke(); } else { g.arc(p[0], p[1], 20, 0, Math.PI * 2); g.fill(); }
+    last = p;
+    if (++moves % 6 === 0) { buzz(5); if (cleared() > 0.5) scratchReveal(); }
+  };
+  cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); last = null; scratch(e); });
+  cv.addEventListener('pointermove', (e) => { if (e.buttons || e.pointerType === 'touch') scratch(e); });
+  cv.addEventListener('pointerup', () => { last = null; });
+  cv.addEventListener('pointercancel', () => { last = null; });
+  box._done = () => { done = true; };
+}
+function scratchReveal() {
+  const box = $('#scratch'), key = box && box.dataset.key;
+  if (!box || !db.scratch[key] || db.scratch[key].revealed) return;
+  if (box._done) box._done();
+  db.scratch[key].revealed = true; db.scratch[key].at = new Date().toISOString(); save();
+  const cv = box.querySelector('canvas'); if (cv) { cv.classList.add('gone'); setTimeout(() => cv.remove(), 500); }
+  const sk = box.querySelector('.sc-skip'); if (sk) sk.remove();
+  box.classList.add('done');
+  const head = box.previousElementSibling;
+  if (head && !head.querySelector('[data-act="scratch-album"]')) head.querySelector('.lbl').insertAdjacentHTML('afterend', `<button class="btn sm ghost" data-act="scratch-album">Album · ${Object.values(db.scratch).filter((x) => x.revealed).length}</button>`);
+  const c = scratchCardData(db.scratch[key].id);
+  fanfare(c.gold); celebrate(c.gold ? 'A rare card! ✦' : '');
+}
+function scratchAlbum() {
+  const list = Object.entries(db.scratch).filter(([, v]) => v.revealed).sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  openModal(`<div class="row"><h3 class="grow">Scratch card album</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
+    <p class="small muted">${plural(list.length, 'card')} collected · ${Math.max(0, SCRATCH_POOL.length - list.length)} still hidden in the deck. Each one only appears once.</p>
+    <div class="sc-album">${list.map(([k, v]) => `<div class="sc-al"><div class="sc-date">${shortDate(new Date(`${k}T12:00`).getTime())}</div><div class="scratch done">${scratchFace(scratchCardData(v.id))}</div></div>`).join('')}</div>`, { close: closeModal });
 }
 /** One week in detail: medal, goals and every workout day by day. Arrows step through earlier weeks. */
 function weekModal(ws) {
@@ -1158,9 +1364,7 @@ function weekCard() {
     <div class="goal tile-peach"><div class="row"><span class="grow il">${ART.jog(30)}Jogging</span><span class="num"><b>${w.jogMin}</b> / ${g.jogMin} min</span></div>
       ${jogRoad(w, st)}</div></div>
     <div class="row q-actions"><button class="btn soft grow il" data-act="pt-log">${ART.flex(26)} Log a PT session</button></div>
-    <div class="row q-shelf-l"><span class="lbl grow">Medal shelf <span class="faint">· tap a week</span></span>
-      <button class="btn sm ghost" data-act="week-detail" data-ws="${ws}">This week ›</button></div>
-    ${medalShelf(ws, g)}
+    ${scratchSection()}
   </section>`;
 }
 
@@ -1245,6 +1449,11 @@ async function surpriseAfterLog(before, what) {
     ev.push({ emoji, title, sub });
   }
   for (const e of ev.slice(0, 2)) await showSurprise(e); // eslint-disable-line no-await-in-loop
+  // first workout of the day → today's scratch card is dealt
+  if (!db.scratch[todayKey()] && workedOutOn(todayKey())) {
+    await showSurprise({ emoji: '<img src="mascot/water-break.webp" width="120" height="120" alt="">', title: 'Scratch card unlocked!', sub: 'Something’s hiding under the foil — scratch it on the Train tab' });
+    render();
+  }
 }
 
 /** Body-scan card on the Train tab: when the next scan is due and how many measures need work. */
@@ -2845,6 +3054,7 @@ function renderView() {
   const fab = $('#fab'); if (fab) fab.hidden = !!db.active || !['train', 'history', 'body'].includes(ui.tab);
   topbar.innerHTML = `<div class="topbar-inner">${v.title}</div>`;
   view.innerHTML = v.body;
+  mountScratch();
   document.querySelectorAll('.tabs button').forEach((b) => {
     b.classList.toggle('on', b.dataset.tab === (ui.tab === 'routine' ? 'settings' : ui.tab));
     b.classList.toggle('due', b.dataset.tab === 'mood' && !!moodDue());
@@ -2999,6 +3209,8 @@ document.addEventListener('click', async (ev) => {
     case 'mood-day': moodModal(t.dataset.d, t.dataset.m ? +t.dataset.m : 0); break;
     case 'mood-month': ui.moodMonth = Math.min(0, (ui.moodMonth || 0) + +t.dataset.d); renderView(); break;
     case 'week-detail': weekModal(+t.dataset.ws); break;
+    case 'scratch-reveal': scratchReveal(); break;
+    case 'scratch-album': scratchAlbum(); break;
     case 'watch-setup': watchSetup(); break;
     case 'mem-edit': memModal(); break;
     case 'mem-decide': memDecide(); break;
@@ -3259,6 +3471,7 @@ function importData(file) {
         });
         if (d.membership && !db.membership) db.membership = d.membership;
         if (d.moods && typeof d.moods === 'object') Object.keys(d.moods).forEach((k) => { if (!db.moods[k]) db.moods[k] = d.moods[k]; });
+        if (d.scratch && typeof d.scratch === 'object') Object.keys(d.scratch).forEach((k) => { if (!db.scratch[k]) db.scratch[k] = d.scratch[k]; });
         if (Array.isArray(d.moodTags)) d.moodTags.forEach((x) => { const t = typeof x === 'string' ? { t: x, g: 'day' } : x; if (t && t.t && !db.moodTags.some((y) => y.t === t.t && y.g === t.g)) db.moodTags.push(t); });
         if (!keepRoutine) { db.routine = d.routine; if (d.plan) db.plan = d.plan; }
         save(); closeModal(); toast(`Imported ${fresh} workouts, ${freshScans} scans${upd ? `, updated ${upd}` : ''}`); render();

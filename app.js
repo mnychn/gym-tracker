@@ -531,10 +531,10 @@ const LIST_LABELS = [
   ['armLF', /LEFT\s*ARM\s*FAT/i], ['armRF', /RIGHT\s*ARM\s*FAT/i], ['legLF', /LEFT\s*LEG\s*FAT/i], ['legRF', /RIGHT\s*LEG\s*FAT/i], ['torsoF', /TORSO\s*FAT/i],
   ['armL', /LEFT\s*ARM\s*LEAN/i], ['armR', /RIGHT\s*ARM\s*LEAN/i], ['legL', /LEFT\s*LEG\s*LEAN/i], ['legR', /RIGHT\s*LEG\s*LEAN/i], ['torso', /TORSO\s*LEAN/i],
   ['visFat', /VISCERAL\s*FAT\s*MASS/i], ['subFat', /SUBCUTANEOUS/i], ['vfl', /VISCERAL\s*FAT\s*LEVEL/i], ['vfa', /VISCERAL\s*FAT\s*AREA/i],
-  ['fat', /BODY\s*FAT\s*PERCENT|FAT\s*PERCENTAGE|PBF/i], ['fatMass', /BODY\s*FAT\s*MASS|^\s*FAT\s*MASS/i], ['lbm', /LEAN\s*BODY\s*MASS/i],
+  ['fat', /BODY\s*FAT\s*PERCENT|FAT\s*PERCENTAGE|PBF/i], ['fatMass', /BODY\s*FAT\s*MASS|TOTAL\s*FAT\s*MASS|^\s*FAT\s*MASS/i], ['lbm', /LEAN\s*BODY\s*MASS/i],
   ['smm', /SKELETAL\s*MUSCLE/i], ['water', /TOTAL\s*BODY\s*WATER/i], ['icf', /INTRA\s*CELLULAR/i], ['ecf', /EXTRA\s*CELLULAR/i],
   ['tee', /TOTAL\s*ENERGY|\(TEE\)/i], ['bmr', /BASAL\s*METABOLIC|\bBMR\b/i], ['protein', /\bPROTEIN\b/i], ['mineral', /\bMINERAL/i],
-  ['whr', /WAIST\s*TO\s*HIP/i], ['bwi', /\bBWI\b|WELLNESS\s*INDEX/i], ['bioAge', /BIO\s*AGE/i], ['weight', /^\s*(BODY\s*)?WEIGHT\b/i],
+  ['whr', /WAIST\s*TO\s*HIP/i], ['bwi', /\bBWI\b|WELLNESS\s*INDEX/i], ['bioAge', /BIO\s*AGE/i], ['weight', /^\s*(TOTAL\s*)?(BODY\s*)?WEIGHT\b/i],
 ];
 const LIST_LIMITS = { tee: [800, 6000], icf: [5, 60], ecf: [2, 40], subFat: [0.5, 100], visFat: [0.05, 20] };
 const VERDICT = { optimal: 'optimal', normal: 'optimal', under: 'under', low: 'under', below: 'under', high: 'high', over: 'high', above: 'high' };
@@ -661,12 +661,31 @@ async function readScanFile(file, onProgress) {
   res.status = list.status;
   return res;
 }
-async function onScanUpload(file) {
+/** Several screenshots of one scan (result sheet + app list screens): merge into one reading.
+ *  List screens (label and value on one row) read most reliably, so they win; the sheet adds ranges, date and anything else. */
+async function readScanFiles(files, onProgress) {
+  const merged = { fields: {}, ranges: {}, status: {}, date: null, sex: null, list: false, read: 0, failed: 0 };
+  const results = [];
+  for (let i = 0; i < files.length; i++) {
+    try { results.push(await readScanFile(files[i], (p) => onProgress && onProgress((i + p) / files.length, i))); merged.read++; }
+    catch (e) { merged.failed++; }
+  }
+  results.sort((a, b) => (a.list ? 1 : 0) - (b.list ? 1 : 0)); // sheets first, list screens last (override)
+  for (const r of results) {
+    Object.assign(merged.fields, r.fields); Object.assign(merged.ranges, r.ranges || {}); Object.assign(merged.status, r.status || {});
+    merged.date = merged.date || r.date; merged.sex = merged.sex || r.sex;
+  }
+  merged.list = results.length > 0 && results.every((r) => r.list);
+  if (!merged.read) throw new Error('none read');
+  return merged;
+}
+async function onScanUpload(files) {
   const st = $('#sc-status');
   const say = (h) => { if (st) { st.hidden = false; st.innerHTML = h; } };
-  say('Reading your scan… <span class="num" id="sc-pct">0%</span> <span class="faint">(first time downloads the reader, ~10 MB)</span>');
+  const many = files.length > 1;
+  say(`Reading ${many ? `${files.length} images` : 'your scan'}… <span class="num" id="sc-pct">0%</span> <span class="faint">(first time downloads the reader, ~10 MB)</span>`);
   try {
-    const res = await readScanFile(file, (p) => { const e = $('#sc-pct'); if (e) e.textContent = `${Math.round(p * 100)}%`; });
+    const res = await readScanFiles(files, (p) => { const e = $('#sc-pct'); if (e) e.textContent = `${Math.round(p * 100)}%`; });
     if (!$('#sc-date')) return; // modal closed meanwhile
     const got = Object.keys(res.fields);
     document.querySelectorAll('.scan-grid .field.filled, #sc-date.filled').forEach((e) => e.classList.remove('filled'));
@@ -678,7 +697,7 @@ async function onScanUpload(file) {
     Object.entries(res.ranges || {}).forEach(([k, r]) => { const e = $(`#sr-${k}`); if (e && !e.value) { e.value = fmtRange(r); e.classList.add('filled'); } });
     const missing = SCAN_FIELDS.filter(([k]) => !got.includes(k)).map(([, l]) => l);
     say(got.length
-      ? `<b>Read ${got.length} value${got.length === 1 ? '' : 's'}</b> (highlighted). Check them — and the date — against your sheet before saving.${res.list ? '<br><span class="faint">This screen shows part of your results — anything not on it is left as it was. Evolt’s Optimal / Under / High verdicts colour your visuals.</span>' : missing.length ? `<br><span class="faint">Not found: ${missing.join(', ')}.</span>` : ''}`
+      ? `<b>Read ${got.length} value${got.length === 1 ? '' : 's'}</b>${many ? ` from ${res.read} image${res.read === 1 ? '' : 's'}` : ''} (highlighted).${res.failed ? ` <span class="faint">${res.failed} image${res.failed === 1 ? '' : 's'} couldn’t be read.</span>` : ''} Check them — and the date — against your sheet before saving.${res.list ? '<br><span class="faint">This screen shows part of your results — anything not on it is left as it was. Evolt’s Optimal / Under / High verdicts colour your visuals.</span>' : missing.length ? `<br><span class="faint">Not found: ${missing.join(', ')}.</span>` : ''}`
       : 'Couldn’t find scan values in that image. Try a sharper screenshot of the result sheet, or type the numbers in.');
   } catch (e) {
     say('Couldn’t read that file. Use a photo or screenshot (JPG/PNG/HEIC), or type the numbers in.');
@@ -695,9 +714,9 @@ function scanModal(scan) {
   ui.ocrStatus = null;
   openModal(`
     <div class="row"><h3 class="grow">${isNew ? 'Add body scan' : 'Edit body scan'}</h3><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
-    <label class="btn soft big upload" style="margin-top:6px">📷 Upload scan photo or screenshot
-      <input type="file" accept="image/*" id="sc-file" style="position:absolute;inset:0;opacity:0"></label>
-    <p class="small muted" id="sc-status" style="margin-top:8px">Reads the numbers on your phone — the image isn’t uploaded anywhere. Or type them in below.</p>
+    <label class="btn soft big upload" style="margin-top:6px">📷 Upload scan photos or screenshots
+      <input type="file" accept="image/*" multiple id="sc-file" style="position:absolute;inset:0;opacity:0"></label>
+    <p class="small muted" id="sc-status" style="margin-top:8px">Pick one or several — e.g. the result sheet plus the Summary and Segmental screens. Read on your phone; nothing is uploaded. Or type the numbers in below.</p>
     <div style="margin-top:10px"><label class="lbl">Date</label><input type="date" class="field" id="sc-date" value="${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}"></div>
     ${[['main', ''], ['seg', 'Body parts (segmental lean & fat)'], ['health', 'Health markers']].map(([grp, title]) => {
       const grid = `<div class="scan-grid">${SCAN_FIELDS.filter((f) => f[3] === grp).map(([k, l, un]) => `<div><label class="lbl">${l} <span class="faint">${u(un)}</span></label>
@@ -1034,7 +1053,7 @@ function jogRoad(w, st) {
   return `<div class="road" role="img" aria-label="${w.jogMin} of ${Math.round(goal)} minutes jogging">
       <span class="road-fill" style="width:${X(w.jogMin)}%"></span>
       ${flags.map((m, i) => `<i class="flag ${w.jogMin >= m ? 'on' : ''} ${i === flags.length - 1 ? 'fin' : ''}" style="left:${X(m)}%">${i === flags.length - 1 ? ART.flag(20) : '★'}</i>`).join('')}
-      <b class="runner" style="left:${X(w.jogMin)}%">${ART.buddy({ m: 0, j: w.jogMin / goal, pose: 'run', size: 46 })}</b>
+      <b class="runner" style="left:clamp(23px, ${X(w.jogMin)}%, calc(100% - 23px))">${ART.buddy({ m: 0, j: w.jogMin / goal, pose: 'run', size: 46 })}</b>
     </div>
     <div class="jogscale">${flags.map((m) => `<span style="left:${X(m)}%">${m % 60 ? `${Math.round(m)}m` : `${m / 60}h`}</span>`).join('')}</div>`;
 }
@@ -3093,7 +3112,7 @@ document.addEventListener('change', (ev) => {
   const el = ev.target;
   if (el.type === 'checkbox') onBind(el);
   if (el.dataset && el.dataset.bind === 'import' && el.files && el.files[0]) importData(el.files[0]);
-  if (el.id === 'sc-file' && el.files && el.files[0]) { onScanUpload(el.files[0]); el.value = ''; }
+  if (el.id === 'sc-file' && el.files && el.files.length) { onScanUpload([...el.files]); el.value = ''; }
   if (el.dataset && el.dataset.bind === 'set' && el.dataset.f === 'w') el.inputMode = wMode(el.value);
 });
 document.addEventListener('keydown', (ev) => {

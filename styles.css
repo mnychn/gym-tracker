@@ -1058,8 +1058,11 @@ h1 { font-weight: 800; letter-spacing: -.01em; }
 .sheet { border: 0; background: var(--surface); }
 
 /* floating tab bar */
-.tabs { left: 14px; right: 14px; bottom: calc(var(--safe-b) + 10px); padding-bottom: 0; border: 0; border-radius: 30px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent); box-shadow: 0 12px 34px rgba(60,40,140,.16); max-width: 560px; margin: 0 auto; }
+/* docked tab bar: pinned flush to the bottom edge, home-indicator area included */
+.tabs { left: 0; right: 0; bottom: 0; padding: 4px max(8px, env(safe-area-inset-left)) var(--safe-b); border: 0; border-radius: 24px 24px 0 0;
+  background: color-mix(in srgb, var(--surface) 96%, transparent); box-shadow: 0 -4px 22px rgba(60,40,140,.10); max-width: none; margin: 0;
+  transform: translateZ(0); }
+html, body { overscroll-behavior-y: none; }
 .tabs button { color: var(--text-2); font-weight: 700; }
 .tabs button svg { padding: 6px 12px; border-radius: 99px; }
 .tabs button.on { color: var(--text); }
@@ -1067,7 +1070,7 @@ h1 { font-weight: 800; letter-spacing: -.01em; }
 .tabs svg .f { fill: currentColor; fill-opacity: .9; } .tabs button:not(.on) svg .f { fill-opacity: 0; }
 .tabs svg .blush { display: none; }
 .view { padding-bottom: calc(var(--tabs-h) + var(--safe-b) + 130px); }
-.fab { background: var(--violet-grad); color: #fff; border: 0; box-shadow: 0 12px 26px rgba(91,47,224,.35); bottom: calc(var(--tabs-h) + var(--safe-b) + 26px); }
+.fab { background: var(--violet-grad); color: #fff; border: 0; box-shadow: 0 12px 26px rgba(91,47,224,.35); bottom: calc(var(--tabs-h) + var(--safe-b) + 18px); }
 
 /* day pills like the date strip */
 .dpill { background: #ececf3; box-shadow: none; }
@@ -1287,3 +1290,8 @@ img.buddy { -webkit-user-select: none; user-select: none; -webkit-user-drag: non
 .stars-btn { background: none; border: 0; padding: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; min-width: 0; }
 .stars-line { color: #fff; opacity: .85; font-size: 13px; line-height: 1.3; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .stars-chips { margin-top: 14px; } .stars-chips span { background: var(--accent-soft); color: var(--text); }
+/* no-medal yet: Buddy napping inside a dashed ring */
+.no-medal { display: inline-grid; place-items: center; box-sizing: border-box; border: 2px dashed var(--text-3); border-radius: 50%; overflow: hidden; background: var(--surface); flex: none; }
+.no-medal img { width: 86%; height: 86%; object-fit: contain; transform: translateY(6%); user-select: none; -webkit-user-select: none; }
+/* room for the running cat above the jog track */
+.road { margin-top: 44px; }

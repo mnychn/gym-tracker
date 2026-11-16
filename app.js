@@ -78,7 +78,7 @@ function defaults() {
   return {
     version: 1,
     plan: seed.plan || 1,
-    settings: { name: '', unit: 'kg', defaultRest: 60, sound: true, vibrate: true, keepAwake: true, theme: 'auto', moodTime: '00:00' },
+    settings: { name: '', unit: 'kg', defaultRest: 60, sound: true, vibrate: true, keepAwake: true, theme: 'auto' },
     goals: { ...GOAL_DEFAULTS },
     routine: clone(seed.routine),
     sessions: clone(seed.sessions),
@@ -1496,14 +1496,7 @@ function idleView() {
     ${others ? `<div class="section-title">Other days</div><div class="stack">${others}</div>` : ''}
     ${memUrgent(memInfo()) ? '' : `<div class="section-title">Membership</div><div class="stack">${membershipCard()}</div>`}
     <div class="section-title">Body</div>
-    <div class="stack">${scanCard()}</div>
-    <div class="section-title">More</div>
-    <div class="stack">
-      <button class="btn big" data-act="start" data-day="">Start empty workout</button>
-      <div class="card"><div class="row"><div class="grow"><b>Rest timer</b><div class="small muted">Quick countdown, no workout needed</div></div></div>
-        <div class="row" style="margin-top:10px;flex-wrap:wrap">${[30, 45, 60, 90, 120, 180].map((s) => `<button class="btn sm soft" data-act="quick-rest" data-s="${s}">${fmtSecs(s)}</button>`).join('')}</div>
-      </div>
-    </div>`,
+    <div class="stack">${scanCard()}</div>`,
   };
 }
 
@@ -2142,14 +2135,6 @@ views.settings = () => {
     <div class="card flush">
       <button class="setting setting-link" data-act="go" data-tab="routine"><div class="grow"><div>Routine</div><div class="small muted">${plural(db.routine.length, 'training day')} · exercises, sets, weights &amp; rest</div></div><span class="chev faint">${ICON.chev}</span></button>
     </div>
-    <div class="section-title">Mood</div>
-    <div class="card flush">
-      <div class="setting"><div class="grow"><div>Check-in reminder</div><div class="small muted">Daily Calendar alert — midnight logs the day that just ended</div></div>
-        <input type="time" class="field" style="width:118px" data-bind="setting" data-k="moodTime" value="${esc(s.moodTime || '00:00')}"></div>
-      <div class="setting"><div class="grow"><div>Add reminder to Calendar</div><div class="small muted">Re-add it after changing the time (delete the old one in Calendar)</div></div><button class="btn sm" data-act="mood-ics">Add</button></div>
-      ${db.moodTags.length ? `<div class="setting" style="flex-wrap:wrap"><div class="grow" style="flex-basis:100%"><div>Your tags</div><div class="small muted">Tap × to remove a tag from the list (past check-ins keep it)</div></div>
-        <div class="fchips" style="margin-top:0">${db.moodTags.map((x, i) => `<button class="fchip sm" data-act="mood-tag-del" data-i="${i}" aria-label="Remove ${esc(x.t)}">${esc(x.t)} ×</button>`).join('')}</div></div>` : ''}
-    </div>
     <div class="section-title">Workout</div>
     <div class="card flush">
       <div class="setting"><div class="grow"><div>Weight unit</div><div class="small muted">Label only — numbers aren't converted</div></div>${seg('unit', [['kg', 'kg'], ['lb', 'lb']])}</div>
@@ -2179,11 +2164,6 @@ views.settings = () => {
     </div>
     <div class="section-title">Membership</div>
     <div class="card flush"><div class="setting"><div class="grow"><div>Membership &amp; PT pack</div><div class="small muted">${memInfo() ? `Ends ${longDate(memInfo().end)} · notice by ${longDate(memInfo().deadline)}` : 'Not set up'}</div></div><button class="btn sm" data-act="mem-edit">${memInfo() ? 'Edit' : 'Set up'}</button></div></div>
-    <div class="section-title">Apple Watch</div>
-    <div class="card flush">
-      <div class="setting"><div class="grow"><div>Connect Apple Watch workouts</div><div class="small muted">Free Shortcut that copies each finished workout for Gym Log</div></div><button class="btn sm" data-act="watch-setup">Set up</button></div>
-      <div class="setting"><div class="grow"><div>Paste from Watch</div><div class="small muted">Import the workout the Shortcut copied</div></div><button class="btn sm" data-act="watch-paste">Paste</button></div>
-    </div>
     <div class="section-title">Credits</div>
     <div class="card small muted" style="line-height:1.6">${REPDB_CREDIT}. Illustrations from the RepDB free tier.</div>
     <div class="section-title">Install as an app</div>
@@ -2482,10 +2462,7 @@ views.mood = () => {
   return {
     title: '<h1>Mood</h1>',
     body: `<div class="stack m-top-gap">${moodHero()}${missed}${moodCalendar()}${cycleCard}</div>
-      <div class="section-title">What affects your mood</div>${insights}
-      <div class="section-title">Reminder</div>
-      <section class="card"><div class="row"><div class="grow"><b>Midnight check-in alert</b><div class="small muted">A daily Calendar alert at ${fmtTime(db.settings.moodTime)} that links back here. Change the time in Settings.</div></div>
-        <button class="btn sm soft" data-act="mood-ics">Add alert</button></div></section>`,
+      <div class="section-title">What affects your mood</div>${insights}`,
   };
 };
 
@@ -2672,26 +2649,6 @@ function moodModal(day, preset) {
     }
   });
   draw();
-}
-
-/** Calendar file: a daily alert at the chosen time (default midnight) that opens the Mood tab. */
-function moodIcs() {
-  const [h, m] = String(db.settings.moodTime || '00:00').split(':').map(Number);
-  const start = new Date(); start.setHours(h, m, 0, 0); if (start <= new Date()) start.setDate(start.getDate() + 1);
-  const ymd = isoDay(start).replace(/-/g, ''), hm = `${pad(h)}${pad(m)}00`;
-  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
-  const url = `${location.origin}${location.pathname}#mood`;
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Gym Log//EN', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT', 'UID:mood-checkin@gym-log', `DTSTAMP:${stamp}`,
-    `DTSTART:${ymd}T${hm}`, 'DURATION:PT5M', 'RRULE:FREQ=DAILY', 'SUMMARY:Mood check-in', `URL:${url}`,
-    `DESCRIPTION:How was today? Log sleep\\, cycle\\, movement\\, people and mood: ${url}`,
-    'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Mood check-in — how was today?', 'TRIGGER:PT0M', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'];
-  const file = new File([lines.join('\r\n')], 'mood-check-in.ics', { type: 'text/calendar' });
-  const href = URL.createObjectURL(file), a = document.createElement('a');
-  a.href = href;
-  if (!/iPhone|iPad/i.test(navigator.userAgent)) a.download = file.name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(href), 5000);
-  toast('Opening Calendar — tap Add All');
 }
 
 // ---------------------------------------------------------------- session editor (history)
@@ -2920,8 +2877,6 @@ document.addEventListener('click', async (ev) => {
     case 'pt-log': ptLogModal(); break;
     case 'mood-day': moodModal(t.dataset.d, t.dataset.m ? +t.dataset.m : 0); break;
     case 'mood-month': ui.moodMonth = Math.min(0, (ui.moodMonth || 0) + +t.dataset.d); renderView(); break;
-    case 'mood-ics': moodIcs(); break;
-    case 'mood-tag-del': db.moodTags.splice(+t.dataset.i, 1); save(); renderView(); break;
     case 'week-detail': weekModal(+t.dataset.ws); break;
     case 'watch-setup': watchSetup(); break;
     case 'mem-edit': memModal(); break;

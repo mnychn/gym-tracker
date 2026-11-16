@@ -2624,10 +2624,10 @@ function moodModal(day, preset) {
     cycle: () => {
       const ph = cyc.phase(day), ns = cyc.next ? dayDiff(day, cyc.next) : null;
       const ctx = ph === 'pre' ? `You’re in your usual PMS window${ns != null && ns >= 0 ? ` — period expected in about ${plural(ns, 'day')}` : ''}.`
-        : ns != null && ns >= 0 && ns <= 14 ? `Period expected in about ${plural(ns, 'day')}.` : cyc.last ? `Cycle day ${dayDiff(cyc.last, day) + 1}.` : 'Log flow when your period comes so Gym Log can learn your cycle.';
+        : ns != null && ns >= 0 && ns <= 14 ? `Period expected in about ${plural(ns, 'day')}.` : cyc.last ? `Cycle day ${dayDiff(cyc.last, day) + 1}.` : 'Log flow when your period comes so Swole Cat can learn your cycle.';
       return `<h3>Cycle &amp; PMS</h3><p class="small muted">${ctx}</p>
       <div class="mq"><b>Period flow</b><div class="fchips" data-group="period">${FLOW.map((f, i) => one('period', i, f)).join('')}</div></div>
-      <div class="mq"><b>PMS / pre-period symptoms</b><p class="small muted" style="margin:2px 0 0">Log these even when your period isn’t here yet — that’s how Gym Log learns how early your mood swings start.</p>
+      <div class="mq"><b>PMS / pre-period symptoms</b><p class="small muted" style="margin:2px 0 0">Log these even when your period isn’t here yet — that’s how Swole Cat learns how early your mood swings start.</p>
         <div class="fchips" data-g="pms">${chips('pmsTags', PMS_TAGS.concat(customTags('pms')))}</div>
         <div class="row add-tag"><input class="field grow" data-new="pms" data-key="pmsTags" placeholder="Add your own" maxlength="28"><button class="btn sm soft" data-act="m:newtag" data-g="pms">Add</button></div></div>
       <div class="mq"><b>How strong were the symptoms?</b><div class="fchips" data-group="pms">${PMS_LEVEL.map((l, i) => one('pms', i, l)).join('')}</div></div>${noteBox('cycle')}`;

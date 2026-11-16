@@ -1,5 +1,5 @@
 // Bump VERSION whenever you change any app file so devices pick up the update.
-const VERSION = 'gymlog-v55';
+const VERSION = 'gymlog-v56';
 const VENDOR = 'gymlog-vendor-1';
 const ASSETS = [
   './', './index.html', './styles.css', './app.js', './seed.js', './guides.js', './anim.js', './art.js', './manifest.webmanifest',

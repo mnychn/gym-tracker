@@ -1397,25 +1397,34 @@ function nextPose(list) {
   ui.lastPose = pick(opts.length ? opts : list);
   return ui.lastPose;
 }
-function buddyLines(b) {
+const POSE_SAY = {
+  press: 'Overhead press — up, up, UP!', curl: 'Curl, squeeze, repeat…', row: 'Row, row, row that cable!', boxing: 'Jab, jab — POW!',
+  bench: 'Bench day! Spot me?', legpress: 'Leg press… feel the burn!', treadmill: 'Treadmill time — puff puff!', jumprope: 'Skip, skip, skip!',
+};
+/** Speech lines that match what Buddy is doing in the picture. */
+function buddyLines(b, pose) {
+  if (pose === 'nap') return ['Zzz… lift heavy, nap hard. Log a workout to wake me up!', 'Zzz… five more minutes… then we lift.'];
   const left = b.st.liftMax - b.w.gym, jogGoal = Math.round(b.st.jogMax * b.st.per), jogLeft = Math.max(0, jogGoal - b.w.jogMin);
-  const out = [!b.w.gym && !b.w.jogMin ? 'Zzz… lift heavy, nap hard. Log a workout to wake me up!' : b.w.gym === 0 ? 'Awake! Now let’s lift and pump up these noodle arms' : left > 0 ? `${plural(left, 'more lift')} and I’ll be fully swole!` : 'MAXIMUM MUSCLE! Look at these biceps!'];
-  out.push(b.w.jogMin === 0 ? 'Take me jogging and I get a headband and speedy sneakers' : jogLeft ? `${jogLeft} more jog minutes and my sneakers get wings!` : 'Winged sneakers unlocked! Zoom zoom');
-  out.push(b.w.gym ? `Muscle power ${b.w.gym}/${b.st.liftMax}. Feel these guns!` : 'My arms are spaghetti right now…');
-  out.push(b.w.jogMin ? `Leg power ${b.w.jogMin}/${jogGoal} min. Calves of steel!` : 'My legs are tiny… let’s go for a run');
-  if (b.gold) out.push('Gold week! Check out my crown');
+  const say = POSE_SAY[pose] || 'Let’s go!';
+  const out = RUN_POSES.includes(pose)
+    ? [`${say} ${jogLeft ? `${jogLeft} more jog minutes this week.` : 'Jogging goal done!'}`, `Leg power ${b.w.jogMin}/${jogGoal} min. Calves of steel!`]
+    : [`${say} ${left > 0 ? `${plural(left, 'more lift')} this week.` : 'Lifting goal done — so strong!'}`, `Muscle power ${b.w.gym}/${b.st.liftMax}. Feel these guns!`];
+  if (b.gold) out.push('Gold week! Best. Cat. Ever.');
   return out;
 }
+/** Poses to pick from: lifting ones once you've lifted, running ones once you've jogged. */
+const posePool = (b) => (b.w.gym && b.w.jogMin ? [...LIFT_POSES, ...RUN_POSES] : b.w.jogMin ? RUN_POSES : LIFT_POSES);
 const pips = (n, max, cls = '') => `<span class="bd-pips ${cls}">${Array.from({ length: Math.max(max, n) }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
 /** Buddy at the top of the Weekly quest: arms grow with lifts, legs with jogging. */
 function buddyBlock() {
   const b = buddyState(), hours = Math.min(b.st.jogMax, Math.floor(b.w.jogMin / b.st.per + 1e-9));
   const asleep = !b.w.gym && !b.w.jogMin;
-  const pose = asleep ? 'nap' : ui.cardPose || (ui.cardPose = pick([...LIFT_POSES, ...(b.w.jogMin ? RUN_POSES : [])]));
+  if (ui.cardPose && !asleep && !posePool(b).includes(ui.cardPose)) ui.cardPose = null;
+  const pose = asleep ? 'nap' : ui.cardPose || (ui.cardPose = pick(posePool(b)));
   return `<div class="q-buddy">
     <button class="buddy-btn" data-act="buddy-tap" aria-label="Poke Buddy">${ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose, size: 200 })}</button>
     <div class="bd-side">
-      <div class="bd-bubble" id="bd-say" aria-live="polite">${buddyLines(b)[(ui.pokes || 0) % 2]}</div>
+      <div class="bd-bubble" id="bd-say" aria-live="polite">${buddyLines(b, pose)[(ui.pokes || 0) % 2]}</div>
       <div class="bd-meter" role="img" aria-label="Muscle power ${b.w.gym} of ${b.st.liftMax} lifts"><span class="il">${ART.lift(22)}</span>${pips(b.w.gym, b.st.liftMax)}</div>
       <div class="bd-meter" role="img" aria-label="Leg power ${hours} of ${b.st.jogMax} jogging hours"><span class="il">${ART.jog(22)}</span>${pips(hours, b.st.jogMax, 'peach')}</div>
     </div></div>`;
@@ -1423,13 +1432,14 @@ function buddyBlock() {
 const POKE = ['r-flex', 'r-jump', 'r-wiggle', 'r-flex', 'r-spin'];
 function buddyPoke(btn) {
   ui.pokes = (ui.pokes || 0) + 1;
-  const b = buddyState(), lines = buddyLines(b);
+  const b = buddyState(), asleep = !b.w.gym && !b.w.jogMin;
+  // new pose on every poke, and the line matches it
+  if (!asleep) ui.cardPose = nextPose(posePool(b));
+  const lines = buddyLines(b, asleep ? 'nap' : ui.cardPose);
   const say = $('#bd-say');
   const giggle = ui.pokes % 7 === 0;
   if (say) { say.textContent = giggle ? 'Hehe, that tickles!' : lines[ui.pokes % lines.length]; say.classList.remove('pop'); void say.offsetWidth; say.classList.add('pop'); }
-  // new pose on every poke
-  ui.cardPose = nextPose([...LIFT_POSES, ...(b.w.jogMin ? RUN_POSES : [])]);
-  btn.innerHTML = ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose: ui.cardPose, size: 200 });
+  btn.innerHTML = ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose: asleep ? 'nap' : ui.cardPose, size: 200 });
   POKE.forEach((c) => btn.classList.remove(c)); void btn.offsetWidth;
   btn.classList.add(giggle ? 'r-wiggle' : POKE[ui.pokes % POKE.length]);
   try { if (navigator.vibrate) navigator.vibrate(15); } catch (e) { /* ignore */ }

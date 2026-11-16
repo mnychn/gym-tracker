@@ -1,20 +1,30 @@
 // Bump VERSION whenever you change any app file so devices pick up the update.
-const VERSION = 'gymlog-v51';
+const VERSION = 'gymlog-v52';
 const VENDOR = 'gymlog-vendor-1';
 const ASSETS = [
   './', './index.html', './styles.css', './app.js', './seed.js', './guides.js', './anim.js', './art.js', './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
   './icons/maskable-512.png', './icons/apple-touch-icon.png', './fonts/nunito-latin.woff2',
-  // Buddy animations
+  // Buddy animations + still frames
+  './mascot/bench-press-still.webp',
   './mascot/bench-press.webp',
+  './mascot/cable-row-still.webp',
   './mascot/cable-row.webp',
+  './mascot/dumbbell-curl-still.webp',
   './mascot/dumbbell-curl.webp',
+  './mascot/jump-rope-still.webp',
   './mascot/jump-rope.webp',
+  './mascot/leg-press-still.webp',
   './mascot/leg-press.webp',
+  './mascot/overhead-press-still.webp',
   './mascot/overhead-press.webp',
+  './mascot/punching-bag-still.webp',
   './mascot/punching-bag.webp',
+  './mascot/sleeping-still.webp',
   './mascot/sleeping.webp',
+  './mascot/treadmill-run-still.webp',
   './mascot/treadmill-run.webp',
+  './mascot/water-break-still.webp',
   './mascot/water-break.webp',
   // exercise illustrations (RepDB free tier)
   './exercise-img/ab-wheel-rollout-peak.webp',

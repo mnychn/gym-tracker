@@ -1,9 +1,9 @@
-/* Gym Log — hand-made illustrations (inline SVG) in a flat mid-century poster style:
-   teal / red-orange / yellow / black / cream, thick black outlines, hatched fur. window.ART.name(size) → SVG string. */
+/* Gym Log — hand-made illustrations (inline SVG): simple black line art with pops of pink and yellow.
+   The mascot is Buddy, a chubby white cat who naps until you train. window.ART.name(size) → SVG string. */
 (function () {
-  // poster palette: near-black ink, cream, teal, red-orange, sunny yellow, leaf green
-  const INK = '#1b1f2b', BL = '#f08a7a', L = '#1f9a8f', LD = '#13716a', P = '#e8553a', PD = '#c43e26', M = '#3f8a4f', MD = '#2c6b3a', Y = '#f6c53c', YD = '#d9a21c', OUT = '#1b1f2b';
-  const CR = '#f6efe0', FUR = '#1f9a8f', FUR2 = '#13716a';
+  // black line art + white, with pops of pink and yellow
+  const INK = '#111111', BL = '#f4a0b5', L = '#f4a0b5', LD = '#e07f98', P = '#f4a0b5', PD = '#e07f98', M = '#ffd85c', MD = '#efbd2f', Y = '#ffd85c', YD = '#efbd2f', OUT = '#111111';
+  const CR = '#f7f0d8', FUR = '#9c9c9c', FUR2 = '#5e5e5e'; // grey tabby, dark stripes, cream muzzle
   /** Fuzzy outline: a squarish blob with little scalloped tufts all round. */
   const fur = (cx, cy, rx, ryT, ryB, n, bump) => {
     const e = (v) => Math.sign(v) * Math.pow(Math.abs(v), 0.78);
@@ -32,15 +32,20 @@
     const e = 2.3 * k, dx = 5.5 * k;
     const eyes = mood === 'sleep'
       ? `<path d="M${x - dx - 2.2 * k} ${y} q${2.2 * k} ${1.8 * k} ${4.4 * k} 0 M${x + dx - 2.2 * k} ${y} q${2.2 * k} ${1.8 * k} ${4.4 * k} 0" stroke="${INK}" stroke-width="${1.6 * k}" fill="none" stroke-linecap="round"/>`
-      : `<circle cx="${x - dx}" cy="${y}" r="${e * 1.9}" fill="#fff" stroke="${INK}" stroke-width="${0.9 * k}"/><circle cx="${x + dx}" cy="${y}" r="${e * 1.9}" fill="#fff" stroke="${INK}" stroke-width="${0.9 * k}"/><circle cx="${x - dx + 0.6 * k}" cy="${y + 0.4 * k}" r="${e}" fill="${INK}"/><circle cx="${x + dx + 0.6 * k}" cy="${y + 0.4 * k}" r="${e}" fill="${INK}"/><circle cx="${x - dx + 0.8 * k}" cy="${y - 0.9 * k}" r="${0.8 * k}" fill="${CR}"/><circle cx="${x + dx + 0.8 * k}" cy="${y - 0.9 * k}" r="${0.8 * k}" fill="${CR}"/>`;
+      : `<circle cx="${x - dx}" cy="${y}" r="${e}" fill="${INK}"/><circle cx="${x + dx}" cy="${y}" r="${e}" fill="${INK}"/><circle cx="${x - dx + 0.8 * k}" cy="${y - 0.9 * k}" r="${0.8 * k}" fill="${CR}"/><circle cx="${x + dx + 0.8 * k}" cy="${y - 0.9 * k}" r="${0.8 * k}" fill="${CR}"/>`;
     const mouth = mood === 'open'
       ? `<ellipse cx="${x}" cy="${y + 4.6 * k}" rx="${2.4 * k}" ry="${2 * k}" fill="${INK}"/>`
-      : `<path d="M${x - 3 * k} ${y + 3.6 * k} Q${x} ${y + 6.6 * k} ${x + 3 * k} ${y + 3.6 * k}" stroke="${INK}" stroke-width="${1.7 * k}" fill="none" stroke-linecap="round"/>`;
+      : `<path d="M${x - 3.4 * k} ${y + 3.4 * k} q${1.7 * k} ${2.4 * k} ${3.4 * k} 0 q${1.7 * k} ${2.4 * k} ${3.4 * k} 0" stroke="${INK}" stroke-width="${1.5 * k}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
     return `${eyes}<ellipse cx="${x - 10 * k}" cy="${y + 4 * k}" rx="${3.2 * k}" ry="${2 * k}" fill="${BL}" opacity=".85"/><ellipse cx="${x + 10 * k}" cy="${y + 4 * k}" rx="${3.2 * k}" ry="${2 * k}" fill="${BL}" opacity=".85"/>${mouth}`;
   };
-  const horn = (x, y, s, dir) => `<path d="M${x - 4.5 * s} ${y + 4 * s} C${x - 5 * s + dir * 1.5 * s} ${y - 7 * s} ${x + 5 * s + dir * 1.5 * s} ${y - 7 * s} ${x + 4.5 * s} ${y + 4 * s} Z" fill="${Y}" stroke="${OUT}" stroke-width="${Math.min(3, 1.6 * Math.max(0.8, s))}" stroke-linejoin="round"/>
-    <ellipse cx="${x + dir * 0.6 * s}" cy="${y - 2.6 * s}" rx="${1.6 * s}" ry="${1 * s}" fill="${CR}" opacity=".7"/>`;
-  const blob = (cx = 32, cy = 40, s = 1) => `${horn(cx - 11 * s, cy - 23 * s, s, -1)}${horn(cx + 11 * s, cy - 23 * s, s, 1)}<path d="${fur(cx, cy, 24 * s, 24 * s, 17 * s, 26, 1.8 * s)}" fill="${FUR}" stroke="${OUT}" stroke-width="2.4" stroke-linejoin="round"/><path d="${hatch(cx, cy, 22 * s, 18 * s, 8, 2.6 * s, (x, y) => Math.abs(x - cx) < 11 * s && y > cy - 6 * s && y < cy + 10 * s)}" stroke="${FUR2}" stroke-width="${1.1 * s}" stroke-linecap="round"/>`;
+  /** Cat ear: rounded triangle with a pink inside. dir -1 = left, 1 = right. */
+  const horn = (x, y, s, dir) => `<path d="M${x - 6 * s} ${y + 5 * s} L${x + dir * 1.5 * s} ${y - 9 * s} Q${x + dir * 2.5 * s} ${y - 10.5 * s} ${x + dir * 3.5 * s} ${y - 8.5 * s} L${x + 7 * s} ${y + 5 * s} Z" fill="${FUR}" stroke="${OUT}" stroke-width="${Math.min(4, 1.7 * Math.max(0.8, s))}" stroke-linejoin="round"/>
+    <path d="M${x - 2.6 * s} ${y + 3 * s} L${x + dir * 1.8 * s} ${y - 5 * s} L${x + 3.8 * s} ${y + 3 * s} Z" fill="${P}"/>`;
+  const catPath = (cx, cy, s) => `M${cx} ${cy - 24 * s} C${cx + 16 * s} ${cy - 24 * s} ${cx + 25 * s} ${cy - 11 * s} ${cx + 25 * s} ${cy + 1 * s} C${cx + 25 * s} ${cy + 13 * s} ${cx + 14 * s} ${cy + 17 * s} ${cx} ${cy + 17 * s} C${cx - 14 * s} ${cy + 17 * s} ${cx - 25 * s} ${cy + 13 * s} ${cx - 25 * s} ${cy + 1 * s} C${cx - 25 * s} ${cy - 11 * s} ${cx - 16 * s} ${cy - 24 * s} ${cx} ${cy - 24 * s} Z`;
+  const whisk = (cx, cy, s) => `<path d="M${cx - 16 * s} ${cy} l${-7 * s} ${-1.5 * s} M${cx - 16 * s} ${cy + 3 * s} l${-7 * s} ${1.5 * s} M${cx + 16 * s} ${cy} l${7 * s} ${-1.5 * s} M${cx + 16 * s} ${cy + 3 * s} l${7 * s} ${1.5 * s}" stroke="${INK}" stroke-width="${0.9 * s}" stroke-linecap="round"/>`;
+  const blob = (cx = 32, cy = 40, s = 1) => `${horn(cx - 13 * s, cy - 18 * s, s, -1)}${horn(cx + 13 * s, cy - 18 * s, s, 1)}<path d="${catPath(cx, cy, s)}" fill="${FUR}" stroke="${OUT}" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="M${cx - 4 * s} ${cy - 22 * s} l${1 * s} ${5 * s} M${cx} ${cy - 23 * s} v${5.5 * s} M${cx + 4 * s} ${cy - 22 * s} l${-1 * s} ${5 * s} M${cx - 24 * s} ${cy - 4 * s} h${5 * s} M${cx + 24 * s} ${cy - 4 * s} h${-5 * s}" stroke="${FUR2}" stroke-width="${1.6 * s}" stroke-linecap="round"/>
+    <ellipse cx="${cx}" cy="${cy + 6 * s}" rx="${9 * s}" ry="${6 * s}" fill="${CR}"/>${whisk(cx, cy + 3 * s, s)}`;
   const arm = (d) => `<path d="${d}" stroke="${OUT}" stroke-width="7" stroke-linecap="round" fill="none"/><path d="${d}" stroke="${FUR}" stroke-width="4" stroke-linecap="round" fill="none"/>`;
   const sparkle = (x, y, r, c = '#fff') => `<path d="M${x} ${y - r} L${x + r * 0.28} ${y - r * 0.28} L${x + r} ${y} L${x + r * 0.28} ${y + r * 0.28} L${x} ${y + r} L${x - r * 0.28} ${y + r * 0.28} L${x - r} ${y} L${x - r * 0.28} ${y - r * 0.28} Z" fill="${c}"/>`;
   const svg = (inner, size, label) => `<svg class="art" width="${size}" height="${size}" viewBox="0 0 64 64" ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'}>${inner}</svg>`;
@@ -72,7 +77,7 @@
     star: (s = 40) => svg(`<path d="M32 4 C34 4 35 5 36 7 L41 18 L53 19.5 C57 20 58 23 55.5 25.5 L46.5 34 L49 46 C49.8 50 47 52 43.5 50 L32 44 L20.5 50 C17 52 14.2 50 15 46 L17.5 34 L8.5 25.5 C6 23 7 20 11 19.5 L23 18 L28 7 C29 5 30 4 32 4 Z" fill="${Y}" stroke="${YD}" stroke-width="2" stroke-linejoin="round"/>${face(32, 28, 0.8)}`, s),
     target: (s = 40) => svg(`<circle cx="30" cy="34" r="25" fill="${P}"/><circle cx="30" cy="34" r="18" fill="${CR}"/><circle cx="30" cy="34" r="11" fill="${P}"/>
       <path d="M30 34 L54 10" stroke="${LD}" stroke-width="3.5" stroke-linecap="round"/><path d="M50 6 l8 0 0 8 -6 -2z" fill="${L}"/>${face(30, 32, 0.6)}`, s),
-    pie: (s = 40) => svg(`<circle cx="32" cy="32" r="26" fill="#2a78d6"/><path d="M32 32 L32 6 A26 26 0 0 1 56.7 40 Z" fill="#1baf7a"/><path d="M32 32 L56.7 40 A26 26 0 0 1 40 56.7 Z" fill="#eb6834"/>
+    pie: (s = 40) => svg(`<circle cx="32" cy="32" r="26" fill="#9c9c9c"/><path d="M32 32 L32 6 A26 26 0 0 1 56.7 40 Z" fill="#f4a0b5"/><path d="M32 32 L56.7 40 A26 26 0 0 1 40 56.7 Z" fill="#ffd85c"/>
       <circle cx="32" cy="32" r="15" fill="${CR}"/>${face(32, 30, 0.7)}`, s),
     flex: (s = 40) => svg(`${arm('M47 46 L56 36')}${blob(29, 40, 0.84)}
       <rect x="53.5" y="20" width="4.5" height="20" rx="2.2" fill="${LD}"/><rect x="49" y="15" width="13.5" height="7" rx="3.5" fill="${L}"/><rect x="49" y="38" width="13.5" height="7" rx="3.5" fill="${L}"/>
@@ -106,6 +111,7 @@
   const bStyle = (m, j) => { const k = clamp(m), q = clamp(j); return { w: 11 + k * 11, b: 0.15 + k * 1.05, f: 0.8 + k * 0.35, k, lw: 8 + q * 7, sn: 0.7 + q * 0.45, q }; };
   // [shoulder, elbow, hand] per arm; x mirrored for the right arm when given as 'mirror'
   const POSES = {
+    nap: { l: [[62, 134], [50, 156], [80, 160]], r: 'mirror' },
     flex: { l: [[62, 130], [14, 124], [18, 86]], r: 'mirror' },
     flexOne: { l: [[62, 130], [14, 124], [18, 86]], r: [[160, 136], [186, 152], [166, 164]] },
     victory: { l: [[66, 118], [40, 86], [28, 54]], r: 'mirror' },
@@ -135,7 +141,7 @@
         <g transform="translate(${mx} ${my}) rotate(${ang.toFixed(1)})"><g class="bd-bi" style="transform:scale(${st.b})">
           <path d="M${-hl} 1 A${hl} ${R} 0 0 1 ${hl} 1 Z" fill="${FUR}"/><path d="M${-hl} 1 A${hl} ${R} 0 0 1 ${hl} 1" stroke="${OUT}" stroke-width="2.6" fill="none" stroke-linecap="round"/>
           <path d="M${-hl * 0.2} -12 q4 -3 8 -1" stroke="${OUT}" stroke-width="2" fill="none" stroke-linecap="round" opacity=".8"/></g></g>
-        <circle class="bd-fist" cx="${H[0]}" cy="${H[1]}" r="11" fill="${FUR}" stroke="${OUT}" stroke-width="2.5" style="transform:scale(${st.f})"/>
+        <circle class="bd-fist" cx="${H[0]}" cy="${H[1]}" r="11" fill="${CR}" stroke="${OUT}" stroke-width="2.5" style="transform:scale(${st.f})"/>
       </g>`;
     };
     // legs: standing, or mid-stride when running
@@ -149,38 +155,45 @@
         <g class="bd-shoe" style="transform:scale(${st.sn})"><ellipse cx="${f[0] + dir * 6}" cy="${f[1] + 2}" rx="15" ry="8.5" fill="${P}" stroke="${OUT}" stroke-width="2.6"/>
           <path d="M${f[0] + dir * 6 - 9} ${f[1] + 6} h18" stroke="${CR}" stroke-width="2.5" stroke-linecap="round"/>
           <path class="bd-wing" d="M${f[0] - dir * 8} ${f[1] - 2} q${-dir * 14} -12 ${-dir * 20} -4 q${dir * 6} 2 ${dir * 4} 6 q${-dir * 8} 0 ${-dir * 12} 4 q${dir * 10} 4 ${dir * 16} 0z" fill="${CR}" stroke="${OUT}" stroke-width="2" style="opacity:${q >= 1 ? 1 : 0}"/></g></g>`).join('');
-    const speed = run ? `<g class="bd-speed">${[0, 1, 2].map((i) => `<path d="M${run > 0 ? 8 - i * 4 : 212 + i * 4} ${104 + i * 16} h${run > 0 ? 26 : -26}" stroke="${L}" stroke-width="4" stroke-linecap="round" style="opacity:${q > i * 0.4 ? 1 : 0}"/>`).join('')}</g>` : '';
-    const brows = `<path class="bd-brows" d="M78 86 l16 6 M142 86 l-16 6" stroke="${INK}" stroke-width="4.5" stroke-linecap="round" style="opacity:${Math.max(k, q) < 0.34 ? 1 : 0}"/>`;
-    const happy = Math.max(k, q) >= 1;
-    // wide open smile with a big tongue and two chunky buck teeth
-    const mouth = `<g class="bd-grin" style="opacity:${happy ? 1 : 0}"><path d="M84 130 Q110 128 136 130 Q134 162 110 164 Q86 162 84 130 Z" fill="${INK}"/>
-        <path d="M96 152 Q110 140 124 152 Q110 166 96 152 Z" fill="${BL}"/><path d="M101 130 h8 v9 a2 2 0 0 1 -2 2 h-4 a2 2 0 0 1 -2 -2z M111 130 h8 v9 a2 2 0 0 1 -2 2 h-4 a2 2 0 0 1 -2 -2z" fill="#fff"/></g>
-      <g class="bd-smile" style="opacity:${happy ? 0 : 1}"><path d="M90 131 Q110 133 130 131 Q128 150 110 151 Q92 150 90 131 Z" fill="${INK}"/>
-        <path d="M100 144 Q110 137 120 144 Q110 152 100 144 Z" fill="${BL}"/><path d="M103 132 h6 v6 a1.5 1.5 0 0 1 -1.5 1.5 h-3 a1.5 1.5 0 0 1 -1.5 -1.5z M111 132 h6 v6 a1.5 1.5 0 0 1 -1.5 1.5 h-3 a1.5 1.5 0 0 1 -1.5 -1.5z" fill="#fff"/></g>`;
-    const tails = run < 0 ? 'M56 82 l-18 -8 M56 86 l-17 6' : 'M164 82 l18 -8 M164 86 l17 6';
-    const band = `<g class="bd-band" style="opacity:${q > 0 ? 1 : 0}"><g clip-path="url(#bd-clip)"><rect x="40" y="74" width="140" height="12" fill="${P}" stroke="${OUT}" stroke-width="2.5"/></g><path d="${tails}" stroke="${P}" stroke-width="5" stroke-linecap="round"/></g>
-      <path class="bd-sweat" d="M156 104 q4 7 0 10 q-4 -3 0 -10z" fill="#9fd8ff" style="opacity:${q >= 0.5 ? 1 : 0}"/>`;
+    const speed = run ? `<g class="bd-speed">${[0, 1, 2].map((i) => `<path d="M${run > 0 ? 8 - i * 4 : 212 + i * 4} ${104 + i * 16} h${run > 0 ? 26 : -26}" stroke="${INK}" stroke-width="4" stroke-linecap="round" style="opacity:${q > i * 0.4 ? 1 : 0}"/>`).join('')}</g>` : '';
+    const brows = '';
+    const happy = Math.max(k, q) >= 1, asleep = Math.max(k, q) <= 0;
+    // cat face: ω mouth, pink nose, whiskers; wide open happy mouth at max power
+    const mouth = `<path d="M106 120 h8 l-4 5 z" fill="${P}" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/>
+      <g class="bd-grin" style="opacity:${happy ? 1 : 0}"><path d="M98 127 Q110 150 122 127 Q110 131 98 127 Z" fill="${INK}"/><path d="M103 138 Q110 133 117 138 Q110 146 103 138 Z" fill="${P}"/></g>
+      <path class="bd-smile" d="M99 127 q5.5 7 11 0 q5.5 7 11 0" stroke="${INK}" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="opacity:${happy ? 0 : 1}"/>
+      <path d="M66 118 l-22 -4 M66 125 l-22 2 M154 118 l22 -4 M154 125 l22 2" stroke="${INK}" stroke-width="2.4" stroke-linecap="round"/>`;
+    const tails = run < 0 ? 'M54 86 l-18 -8 M54 90 l-17 6' : 'M166 86 l18 -8 M166 90 l17 6';
+    const band = `<g class="bd-band" style="opacity:${q > 0 ? 1 : 0}"><g clip-path="url(#bd-clip)"><rect x="40" y="80" width="140" height="12" fill="${Y}" stroke="${OUT}" stroke-width="2.5"/></g><path d="${tails}" stroke="${Y}" stroke-width="5" stroke-linecap="round"/></g>
+      <path class="bd-sweat" d="M156 104 q4 7 0 10 q-4 -3 0 -10z" fill="#fff" stroke="${INK}" stroke-width="1.8" style="opacity:${q >= 0.5 ? 1 : 0}"/>`;
     const crown = gold ? `<path d="M88 70 l-3 -22 14 12 11 -18 11 18 14 -12 -3 22 z" fill="${Y}" stroke="${OUT}" stroke-width="3" stroke-linejoin="round"/><circle cx="110" cy="56" r="3.5" fill="${P}"/>${sparkle(190, 40, 8, Y)}${sparkle(28, 40, 6, Y)}` : '';
-    const bar = P0.bar ? (() => { const [a, b] = [arms.l[2], arms.r[2]]; return `<rect x="${a[0] - 14}" y="${a[1] - 3}" width="${b[0] - a[0] + 28}" height="6" rx="3" fill="${LD}"/>
-      <rect x="${a[0] - 24}" y="${a[1] - 15}" width="11" height="30" rx="4" fill="${L}"/><rect x="${b[0] + 13}" y="${b[1] - 15}" width="11" height="30" rx="4" fill="${L}"/>`; })() : '';
-    const wave = P0.wave ? `<path d="M206 52 q6 4 4 12 M214 46 q7 6 4 16" stroke="${L}" stroke-width="3" fill="none" stroke-linecap="round"/>` : '';
+    const bar = P0.bar ? (() => { const [a, b] = [arms.l[2], arms.r[2]]; return `<rect x="${a[0] - 14}" y="${a[1] - 3}" width="${b[0] - a[0] + 28}" height="6" rx="3" fill="${INK}"/>
+      <rect x="${a[0] - 26}" y="${a[1] - 17}" width="13" height="34" rx="5" fill="${P}" stroke="${INK}" stroke-width="2.6"/><rect x="${b[0] + 13}" y="${b[1] - 17}" width="13" height="34" rx="5" fill="${Y}" stroke="${INK}" stroke-width="2.6"/>`; })() : '';
+    const wave = P0.wave ? `<path d="M206 52 q6 4 4 12 M214 46 q7 6 4 16" stroke="${INK}" stroke-width="3" fill="none" stroke-linecap="round"/>` : '';
     const lean = run ? ` transform="rotate(${run * 5} 110 160)"` : '';
     return `<svg class="buddy pose-${pose}" width="${size}" height="${Math.round(size * 0.94)}" viewBox="0 0 220 206" aria-hidden="true">
       <defs><clipPath id="bd-clip"><path d="${BODY}"/></clipPath></defs>
-      <ellipse class="bd-shadow" cx="110" cy="196" rx="58" ry="7" fill="${INK}" opacity=".85"/>
+      <ellipse class="bd-shadow" cx="110" cy="196" rx="58" ry="7" fill="${INK}" opacity=".12"/>
       ${speed}
+      <g class="bd-zzz" style="opacity:${asleep ? 1 : 0}">${sparkle(150, 30, 6, Y)}${sparkle(40, 60, 5, P)}<path d="M166 52 h12 l-12 12 h12 M186 30 h9 l-9 9 h9 M200 14 h6 l-6 6 h6" stroke="${INK}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
       <g class="bd-all"><g${lean}>${legSvg}${arm('l', arms.l)}${arm('r', arms.r)}
-        ${horn(80, 58, 2.6, -1)}${horn(140, 58, 2.6, 1)}
-        <path d="${BODY}" fill="${FUR}" stroke="${OUT}" stroke-width="4.2" stroke-linejoin="round"/>
-        <path d="${HATCH}" stroke="${FUR2}" stroke-width="2.2" stroke-linecap="round"/>
+        <g class="bd-tail"><path d="${run < 0 ? 'M62 160 C30 168 20 140 34 118' : 'M158 160 C190 168 200 140 186 118'}" stroke="${OUT}" stroke-width="17" fill="none" stroke-linecap="round"/>
+          <path d="${run < 0 ? 'M62 160 C30 168 20 140 34 118' : 'M158 160 C190 168 200 140 186 118'}" stroke="${FUR}" stroke-width="10" fill="none" stroke-linecap="round"/>
+          <path d="${run < 0 ? 'M40 160 l6 -8 M30 142 l9 -2 M34 126 l8 3' : 'M180 160 l-6 -8 M190 142 l-9 -2 M186 126 l-8 3'}" stroke="${FUR2}" stroke-width="4" stroke-linecap="round"/></g>
+        ${horn(76, 76, 2.7, -1)}${horn(144, 76, 2.7, 1)}
+        <path d="${BODY}" fill="${FUR}" stroke="${OUT}" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M99 70 l3 14 M110 68 v16 M121 70 l-3 14 M50 112 h15 M49 126 h13 M52 140 h11 M170 112 h-15 M171 126 h-13 M168 140 h-11" stroke="${FUR2}" stroke-width="5" stroke-linecap="round"/>
+        <ellipse cx="110" cy="160" rx="32" ry="12" fill="${CR}"/>
+        <ellipse cx="110" cy="128" rx="22" ry="13" fill="${CR}"/>
         ${band}${crown}${brows}
-        <g class="bd-eyes"><ellipse cx="92" cy="106" rx="15" ry="16" fill="#fff" stroke="${INK}" stroke-width="3.2"/><ellipse cx="128" cy="104" rx="15" ry="16" fill="#fff" stroke="${INK}" stroke-width="3.2"/>
-          <circle cx="96" cy="102" r="7" fill="${INK}"/><circle cx="132" cy="100" r="7" fill="${INK}"/></g>
+        <g class="bd-awake" style="opacity:${asleep ? 0 : 1}"><g class="bd-eyes"><ellipse cx="92" cy="108" rx="7" ry="8.5" fill="${INK}"/><ellipse cx="128" cy="108" rx="7" ry="8.5" fill="${INK}"/>
+          <circle cx="94.5" cy="104.5" r="2.6" fill="#fff"/><circle cx="130.5" cy="104.5" r="2.6" fill="#fff"/></g></g>
+        <g class="bd-sleep" style="opacity:${asleep ? 1 : 0}"><path d="M84 108 q8 7 16 0 M120 108 q8 7 16 0" stroke="${INK}" stroke-width="3.4" fill="none" stroke-linecap="round"/></g>
+        <ellipse cx="78" cy="124" rx="9" ry="5.5" fill="${BL}"/><ellipse cx="142" cy="124" rx="9" ry="5.5" fill="${BL}"/>
         ${mouth}${bar}${wave}
       </g></g></svg>`;
   };
-  const BODY = fur(110, 120, 60, 60, 51, 48, 3.4);
-  const HATCH = hatch(110, 122, 56, 50, 32, 7, (x, y) => x > 72 && x < 148 && y > 86 && y < 156);
+  const BODY = 'M110 66 C152 66 172 98 172 128 C172 160 146 174 110 174 C74 174 48 160 48 128 C48 98 68 66 110 66 Z';
   /** Animate an existing Buddy to new muscle / leg power (CSS transitions do the swelling). */
   A.buddySet = (el, m, j) => {
     if (!el) return; const st = bStyle(m, j);
@@ -194,7 +207,7 @@
     each('.bd-speed path', (p, i) => { p.style.opacity = st.q > i * 0.4 ? 1 : 0; });
     const op = (sel, on) => each(sel, (n) => { n.style.opacity = on ? 1 : 0; });
     const hi = Math.max(st.k, st.q);
-    op('.bd-brows', hi < 0.34); op('.bd-grin', hi >= 1); op('.bd-smile', hi < 1); op('.bd-band', st.q > 0); op('.bd-sweat', st.q >= 0.5);
+    op('.bd-awake', hi > 0); op('.bd-sleep', hi <= 0); op('.bd-zzz', hi <= 0); op('.bd-grin', hi >= 1); op('.bd-smile', hi < 1); op('.bd-band', st.q > 0); op('.bd-sweat', st.q >= 0.5);
   };
   window.ART = A;
 }());

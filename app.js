@@ -1393,7 +1393,7 @@ function nextPose(list) {
 }
 function buddyLines(b) {
   const left = b.st.liftMax - b.w.gym, jogGoal = Math.round(b.st.jogMax * b.st.per), jogLeft = Math.max(0, jogGoal - b.w.jogMin);
-  const out = [b.w.gym === 0 ? 'New week, noodle arms! Let’s lift and pump me up' : left > 0 ? `${plural(left, 'more lift')} and I’ll be fully swole!` : 'MAXIMUM MUSCLE! Look at these biceps!'];
+  const out = [!b.w.gym && !b.w.jogMin ? 'Zzz… lift heavy, nap hard. Log a workout to wake me up!' : b.w.gym === 0 ? 'Awake! Now let’s lift and pump up these noodle arms' : left > 0 ? `${plural(left, 'more lift')} and I’ll be fully swole!` : 'MAXIMUM MUSCLE! Look at these biceps!'];
   out.push(b.w.jogMin === 0 ? 'Take me jogging and I get a headband and speedy sneakers' : jogLeft ? `${jogLeft} more jog minutes and my sneakers get wings!` : 'Winged sneakers unlocked! Zoom zoom');
   out.push(b.w.gym ? `Muscle power ${b.w.gym}/${b.st.liftMax}. Feel these guns!` : 'My arms are spaghetti right now…');
   out.push(b.w.jogMin ? `Leg power ${b.w.jogMin}/${jogGoal} min. Calves of steel!` : 'My legs are tiny… let’s go for a run');
@@ -1404,7 +1404,8 @@ const pips = (n, max, cls = '') => `<span class="bd-pips ${cls}">${Array.from({ 
 /** Buddy at the top of the Weekly quest: arms grow with lifts, legs with jogging. */
 function buddyBlock() {
   const b = buddyState(), hours = Math.min(b.st.jogMax, Math.floor(b.w.jogMin / b.st.per + 1e-9));
-  const pose = ui.cardPose || (ui.cardPose = pick([...LIFT_POSES, ...(b.w.jogMin ? RUN_POSES : [])]));
+  const asleep = !b.w.gym && !b.w.jogMin;
+  const pose = asleep ? 'nap' : ui.cardPose || (ui.cardPose = pick([...LIFT_POSES, ...(b.w.jogMin ? RUN_POSES : [])]));
   return `<div class="q-buddy">
     <button class="buddy-btn" data-act="buddy-tap" aria-label="Poke Buddy">${ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose, size: 162 })}</button>
     <div class="bd-side">
@@ -1888,7 +1889,7 @@ function bodyHero(s) {
       <div class="b-msg">${msg}</div>
       <div class="b-counts"><span class="b-c good"><b class="num">${good}</b> optimal</span><span class="b-c warn"><b class="num">${work}</b> to work on</span></div>
       <span class="b-next il">${ART.calendar(20)}Next scan ${nextScanText(s)}</span></div>
-    ${(() => { const b = buddyState(); return ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose: mood === 'happy' ? pick(['victory', 'wave', 'flexOne']) : pick(['flex', 'lift']), size: 124 }); })()}
+    ${(() => { const b = buddyState(); return ART.buddy({ m: b.m, j: b.j, gold: b.gold, pose: !b.w.gym && !b.w.jogMin ? 'nap' : mood === 'happy' ? pick(['victory', 'wave', 'flexOne']) : pick(['flex', 'lift']), size: 124 }); })()}
   </section>`;
 }
 function bodyView() {

@@ -2211,12 +2211,14 @@ const SLEEP_GOOD = ['Early night', 'No screens before bed', 'Wind-down routine',
 const PMS_TAGS = ['Mood swings', 'Irritable', 'Teary', 'Anxious', 'Low mood', 'Cravings', 'Bloating', 'Tender breasts', 'Cramps', 'Headache', 'Fatigue', 'Breakouts', 'Back pain', 'Trouble sleeping'];
 const MOVE_TAGS = ['Gym workout', 'PT session', 'Jog / run', 'Walk', 'Class', 'Yoga / stretching', 'Cycling', 'Swim', 'Sport', 'Dance', 'Just rested'];
 const OUT_TAGS = ['Sunshine', 'Nature', 'Errands', 'Commute', 'Café / restaurant', 'Shopping'];
-const PEOPLE_TAGS = ['Family', 'Friends', 'Partner', 'Colleagues', 'Met someone new', 'Good chat', 'Alone time', 'Argument', 'Felt left out'];
+const PEOPLE_TAGS = ['Family', 'Friends', 'Acquaintance (PT)'];
 const DAY_TAGS = [['Doing', ['Work', 'Study', 'Hobby', 'Chores', 'Travel', 'Lots of screen time', 'Lazy day', 'Busy day', 'Productive']],
-  ['Food & drink', ['Ate well', 'Junk food', 'Caffeine', 'Alcohol', 'Skipped meals', 'Drank enough water']],
-  ['Body', ['Headache', 'Sick', 'Tired', 'Sore', 'Low energy', 'Injured']]];
+  ['Food & drink', ['Ate well', 'Junk food', 'Caffeine', 'Alcohol', 'Skipped meals', 'Drank enough water']]];
+const ENERGY = ['', 'Low', 'Neutral', 'High'];
+const ENERGY_LOW = ['Poor sleep', 'Period / PMS', 'Stress', 'Didn’t eat enough', 'Sick', 'Overworked', 'Hard workout', 'Hangover', 'Bored', 'Gloomy weather'];
+const ENERGY_HIGH = ['Slept well', 'Worked out', 'Ate well', 'Sunshine', 'Caffeine', 'Time with people', 'Rested', 'Good news', 'Achieved something'];
 const FEEL_TAGS = ['Happy', 'Calm', 'Grateful', 'Motivated', 'Confident', 'Stressed', 'Anxious', 'Irritable', 'Sad', 'Lonely', 'Overwhelmed', 'Bored'];
-const CARDS = [['sleep', 'Sleep'], ['cycle', 'Cycle'], ['move', 'Out & moving'], ['people', 'People'], ['day', 'Your day'], ['feel', 'Feelings']];
+const CARDS = [['sleep', 'Sleep'], ['move', 'Out & moving'], ['people', 'People'], ['day', 'Your day'], ['feel', 'Feelings & energy'], ['cycle', 'Cycle']];
 const CARD_ICON = {
   sleep: '<path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/>',
   cycle: '<path d="M12 3.5C9 8 6.5 11 6.5 14.5a5.5 5.5 0 0 0 11 0C17.5 11 15 8 12 3.5z"/>',
@@ -2249,7 +2251,7 @@ const fmtTime = (hm) => { if (!hm || hm === '00:00') return 'midnight'; const [h
 const fmtH = (h) => (h == null ? '—' : `${Math.floor(h)}${h % 1 ? `<small>½</small>` : ''} h`).replace('<small>½</small>', h % 1 >= 0.5 ? '½' : '');
 const pmsDay = (e) => !!e && ((e.pms || 0) >= 1 || (e.pmsTags || []).length > 0);
 /** Every tag on a day, across all cards (used for "what affects your mood"). */
-const allTags = (e) => [...(e.tags || []), ...(e.move || []), ...(e.pmsTags || []), ...(e.sleepTags || []), ...(e.feel || [])];
+const allTags = (e) => [...(e.tags || []), ...(e.move || []), ...(e.pmsTags || []), ...(e.sleepTags || []), ...(e.feel || []), ...(e.energyTags || [])];
 const customTags = (g) => db.moodTags.filter((x) => x.g === g).map((x) => x.t);
 
 /** What needs a check-in right now: tonight's (after 8 pm / before 5 am), or yesterday's if it was missed. */
@@ -2321,6 +2323,8 @@ function moodFactors() {
   const tags = new Set(); days.forEach((k) => allTags(db.moods[k]).forEach((t) => tags.add(t)));
   const lateBed = (e) => { const m = hmMin(e.bed); return m == null ? null : (m < 720 ? m + 1440 : m) > 1470; };
   const defs = [...tags].map((t) => [t, (e) => allTags(e).includes(t)]).concat([
+    ['Low energy', (e) => (e.energy == null ? null : e.energy === 1)],
+    ['High energy', (e) => (e.energy == null ? null : e.energy === 3)],
     ['Left the house', (e) => (e.out == null ? null : e.out)],
     ['Saw people in person', (e) => (e.social == null ? null : e.social === 'person')],
     ['No social contact', (e) => (e.social == null ? null : e.social === 'none')],
@@ -2432,7 +2436,7 @@ function moodHero() {
       <button class="btn sm m-light" style="margin-top:12px" data-act="mood-day" data-d="${day}">Edit check-in</button>`
     : `<h2>How was ${label}?</h2></div>
       <div class="mpick">${[1, 2, 3, 4, 5].map((i) => `<button data-act="mood-day" data-d="${day}" data-m="${i}" aria-label="${MOOD_NAMES[i]}">${moodFace(i, 40)}<span>${MOOD_NAMES[i]}</span></button>`).join('')}</div>
-      <div class="small" style="opacity:.85;margin-top:10px">Rate your day, then add sleep, cycle, people &amp; more if you like.</div>`}
+      <div class="small" style="opacity:.85;margin-top:10px">Rate your day, then add sleep, people, energy &amp; more if you like.</div>`}
     </section>`;
 }
 
@@ -2489,7 +2493,7 @@ views.mood = () => {
 function moodModal(day, preset) {
   const prev = db.moods[day];
   const e = prev ? clone(prev) : {};
-  ['sleepTags', 'pmsTags', 'move', 'tags', 'feel'].forEach((k) => { if (!Array.isArray(e[k])) e[k] = []; });
+  ['sleepTags', 'pmsTags', 'move', 'tags', 'feel', 'energyTags'].forEach((k) => { if (!Array.isArray(e[k])) e[k] = []; });
   if (!e.notes) e.notes = e.note ? { feel: e.note } : {};
   if (e.notes.mood) { e.notes.feel = e.notes.mood; delete e.notes.mood; }
   delete e.note;
@@ -2505,9 +2509,9 @@ function moodModal(day, preset) {
     if (e.move.length) e.out = true;
   }
   let step = -1; // -1 = overview (rate the day + pick a section)
-  const CARD_FIELDS = { sleep: ['sleep', 'bed', 'wake', 'sleepScore', 'sleepTags'], cycle: ['period', 'pms', 'pmsTags'], move: ['out', 'outTime', 'move'], people: ['social'], day: [], feel: ['feel'] };
-  const CARD_TAGS = { move: ['out'], people: ['people'], day: ['day', 'food', 'body'] };
-  const groupList = (g) => (g === 'out' ? OUT_TAGS : g === 'people' ? PEOPLE_TAGS : g === 'day' ? DAY_TAGS[0][1] : g === 'food' ? DAY_TAGS[1][1] : DAY_TAGS[2][1]).concat(customTags(g));
+  const CARD_FIELDS = { sleep: ['sleep', 'bed', 'wake', 'sleepScore', 'sleepTags'], cycle: ['period', 'pms', 'pmsTags'], move: ['out', 'outTime', 'move'], people: ['social'], day: [], feel: ['feel', 'energy', 'energyTags'] };
+  const CARD_TAGS = { move: ['out'], people: ['people'], day: ['day', 'food'] };
+  const groupList = (g) => (g === 'out' ? OUT_TAGS : g === 'people' ? PEOPLE_TAGS : g === 'day' ? DAY_TAGS[0][1] : DAY_TAGS[1][1]).concat(customTags(g));
   const clearCard = (key) => {
     CARD_FIELDS[key].forEach((f) => { e[f] = Array.isArray(e[f]) ? [] : null; });
     (CARD_TAGS[key] || []).forEach((g) => { const l = groupList(g); e.tags = e.tags.filter((t) => !l.includes(t)); });
@@ -2526,6 +2530,8 @@ function moodModal(day, preset) {
     const good = tagGroup(s >= 7 ? 'What helped?' : 'Anything that helped?', 'sleepTags', SLEEP_GOOD, 'sleepGood');
     return s <= 4 ? bad : s >= 7 ? good : bad + good;
   };
+  const energyWhy = () => (e.energy === 1 ? tagGroup('Why was it low?', 'energyTags', ENERGY_LOW, 'enLow')
+    : e.energy === 3 ? tagGroup('What gave you energy?', 'energyTags', ENERGY_HIGH, 'enHigh') : '');
   const scoreWord = (s) => (s == null ? 'Slide to rate' : s <= 2 ? 'Terrible' : s <= 4 ? 'Bad' : s <= 6 ? 'OK' : s <= 8 ? 'Good' : 'Amazing');
   const body = {
     sleep: () => `<h3>How did you sleep?</h3><p class="small muted">The night before ${moodDayLabel(day)}.</p>
@@ -2554,14 +2560,17 @@ function moodModal(day, preset) {
       ${tagGroup('Movement', 'move', MOVE_TAGS, 'move')}${tagGroup('Out and about', 'tags', OUT_TAGS, 'out')}${noteBox('move')}`,
     people: () => `<h3>People</h3>
       <div class="mq"><b>Social interaction</b><div class="fchips" data-group="social">${Object.entries(SOCIAL).map(([k, l]) => one('social', k, l)).join('')}</div></div>
-      ${tagGroup('Who / what happened', 'tags', PEOPLE_TAGS, 'people')}${noteBox('people')}`,
-    day: () => `<h3>Your day</h3>${DAY_TAGS.map(([g, list]) => tagGroup(g, 'tags', list, g === 'Doing' ? 'day' : g === 'Body' ? 'body' : 'food')).join('')}${noteBox('day')}`,
-    feel: () => `<h3>Feelings</h3><p class="small muted">How did you feel during the day?</p>${tagGroup('Feelings', 'feel', FEEL_TAGS, 'feel')}${noteBox('feel')}`,
+      ${tagGroup('Who with', 'tags', PEOPLE_TAGS, 'people')}${noteBox('people')}`,
+    day: () => `<h3>Your day</h3>${DAY_TAGS.map(([g, list]) => tagGroup(g, 'tags', list, g === 'Doing' ? 'day' : 'food')).join('')}${noteBox('day')}`,
+    feel: () => `<h3>Feelings &amp; energy</h3>
+      <div class="mq"><b>Energy</b><div class="fchips" data-group="energy">${[1, 2, 3].map((i) => one('energy', i, ENERGY[i])).join('')}</div></div>
+      <div id="en-why">${energyWhy()}</div>
+      ${tagGroup('Feelings', 'feel', FEEL_TAGS, 'feel')}${noteBox('feel')}`,
   };
   const has = {
     sleep: () => e.sleep != null || e.sleepScore != null || e.bed || e.sleepTags.length, cycle: () => e.period != null || e.pms != null || e.pmsTags.length,
     move: () => e.out != null || e.outTime != null || e.move.length, people: () => e.social != null || PEOPLE_TAGS.some((t) => e.tags.includes(t)),
-    day: () => DAY_TAGS.some(([, l]) => l.some((t) => e.tags.includes(t))), feel: () => e.feel.length > 0,
+    day: () => DAY_TAGS.some(([, l]) => l.some((t) => e.tags.includes(t))), feel: () => e.feel.length > 0 || e.energy != null,
   };
   const groupTags = (key) => (CARD_TAGS[key] || []).flatMap((g) => e.tags.filter((t) => groupList(g).includes(t)));
   const summary = {
@@ -2569,7 +2578,7 @@ function moodModal(day, preset) {
     cycle: () => [e.period != null && (e.period ? `${FLOW[e.period]} flow` : 'No period'), e.pms ? `${PMS_LEVEL[e.pms]} PMS` : '', ...e.pmsTags],
     move: () => [e.out === true ? 'Went out' : e.out === false ? 'Stayed in' : '', e.outTime != null && OUT_TIME[e.outTime], ...e.move, ...groupTags('move')],
     people: () => [e.social && SOCIAL[e.social], ...groupTags('people')],
-    day: () => groupTags('day'), feel: () => e.feel,
+    day: () => groupTags('day'), feel: () => [e.energy && `${ENERGY[e.energy]} energy`, ...e.energyTags, ...e.feel],
   };
   const overview = () => `<div class="row mw-top"><div class="eyebrow grow">${fmtDate(parseDay(day), true)}</div><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
     <h3>How was ${moodDayLabel(day)}?</h3>
@@ -2611,6 +2620,7 @@ function moodModal(day, preset) {
       const k = el.dataset.k, raw = el.dataset.v, v = raw === 'true' ? true : raw === 'false' ? false : /^\d+$/.test(raw) ? +raw : raw;
       e[k] = e[k] === v && k !== 'mood' ? null : v; // tap again to clear
       if (k === 'out' && v === false) e.outTime = null;
+      if (k === 'energy') { const keep = e.energy === 1 ? ENERGY_LOW : e.energy === 3 ? ENERGY_HIGH : []; e.energyTags = e.energyTags.filter((t) => keep.includes(t) || customTags(e.energy === 1 ? 'enLow' : 'enHigh').includes(t)); $('#en-why').innerHTML = energyWhy(); }
       el.parentElement.querySelectorAll('[data-act="m:one"]').forEach((b) => b.setAttribute('aria-pressed', String(b === el && e[k] != null)));
     },
     tag: (el) => {

@@ -1264,3 +1264,19 @@ h1 { font-weight: 800; letter-spacing: -.01em; }
 .pc.win { background: color-mix(in srgb, var(--amber) 18%, transparent); }
 .pc i { width: 70%; border-radius: 4px 4px 2px 2px; display: block; }
 .pc span { font-size: 10.5px; color: var(--text-3); font-weight: 700; margin-top: 3px; }
+/* check-in overview: rate the day, then tap a section */
+.mcats { display: grid; gap: 8px; }
+.mcat { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--surface); border: 1.5px solid var(--line); border-radius: 18px; padding: 10px 12px; cursor: pointer; min-height: 60px; }
+.mcat b { display: block; font-size: 15.5px; }
+.mcat small { display: block; font-size: 13px; color: var(--text-2); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.mcat .grow { min-width: 0; }
+.mcat-i { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; flex: none; }
+.mcat-i svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.c-sleep .mcat-i { background: var(--sky-soft); color: var(--blue); } .c-cycle .mcat-i { background: color-mix(in srgb, var(--flow) 14%, var(--surface)); color: var(--flow); }
+.c-move .mcat-i { background: var(--mint-soft); color: var(--green); } .c-people .mcat-i { background: var(--lav-soft); color: var(--accent); }
+.c-day .mcat-i { background: var(--peach-soft); color: var(--peach-2); } .c-feel .mcat-i { background: color-mix(in srgb, var(--pink) 12%, var(--surface)); color: var(--pink); }
+.mcat-r svg { width: 18px; height: 18px; fill: none; stroke: var(--text-3); stroke-width: 2; display: block; }
+.mcat.done { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
+.mcat.done .mcat-r svg { stroke: var(--accent); stroke-width: 2.6; }
+.mw-back { gap: 2px; padding: 0 12px 0 6px; }
+.mw-back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; }

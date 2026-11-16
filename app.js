@@ -2216,7 +2216,15 @@ const DAY_TAGS = [['Doing', ['Work', 'Study', 'Hobby', 'Chores', 'Travel', 'Lots
   ['Food & drink', ['Ate well', 'Junk food', 'Caffeine', 'Alcohol', 'Skipped meals', 'Drank enough water']],
   ['Body', ['Headache', 'Sick', 'Tired', 'Sore', 'Low energy', 'Injured']]];
 const FEEL_TAGS = ['Happy', 'Calm', 'Grateful', 'Motivated', 'Confident', 'Stressed', 'Anxious', 'Irritable', 'Sad', 'Lonely', 'Overwhelmed', 'Bored'];
-const CARDS = [['sleep', 'Sleep'], ['cycle', 'Cycle'], ['move', 'Out & moving'], ['people', 'People'], ['day', 'Your day'], ['mood', 'Mood']];
+const CARDS = [['sleep', 'Sleep'], ['cycle', 'Cycle'], ['move', 'Out & moving'], ['people', 'People'], ['day', 'Your day'], ['feel', 'Feelings']];
+const CARD_ICON = {
+  sleep: '<path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/>',
+  cycle: '<path d="M12 3.5C9 8 6.5 11 6.5 14.5a5.5 5.5 0 0 0 11 0C17.5 11 15 8 12 3.5z"/>',
+  move: '<circle cx="13.5" cy="4.8" r="1.8"/><path d="M9 21l2.6-6.2 3 2.7V21M8 11.5l3-3.3 3.4.6 2 3.2 2.4.8M11.6 14.8l1.2-5.6"/>',
+  people: '<circle cx="9" cy="8.5" r="3"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6"/><circle cx="16.5" cy="9" r="2.4"/><path d="M16.2 13.8c2.3.1 3.8 1.6 4.3 4.4"/>',
+  day: '<circle cx="12" cy="12" r="4"/><path d="M12 2.8v2M12 19.2v2M2.8 12h2M19.2 12h2M5.5 5.5l1.4 1.4M17.1 17.1l1.4 1.4M5.5 18.5l1.4-1.4M17.1 6.9l1.4-1.4"/>',
+  feel: '<path d="M12 19.5s-7-4.3-7-9.2A3.8 3.8 0 0 1 12 8a3.8 3.8 0 0 1 7 2.3c0 4.9-7 9.2-7 9.2z"/>',
+};
 
 const CAT_HEAD = 'M5 19.5c-.8-2.6-1-5.6-.6-8.3L5.6 4l4.2 3.6c1.4-.4 3-.4 4.4 0L18.4 4l1.2 7.2c.4 2.7.2 5.7-.6 8.3z';
 const MOOD_FACE = {
@@ -2420,11 +2428,11 @@ function moodHero() {
     <div class="m-head"><div class="eyebrow">Nightly check-in</div>
     ${e ? `<div class="row" style="gap:10px;margin:2px 0 8px">${e.mood ? moodFace(e.mood, 44) : ''}<h2 style="margin:0">${e.mood ? `${MOOD_NAMES[e.mood]} ${label}` : `Logged ${label}`}</h2></div></div>
       <div class="mchips">${chips.slice(0, 10).map((c) => `<span>${esc(c)}</span>`).join('')}${chips.length > 10 ? `<span>+${chips.length - 10}</span>` : ''}</div>
+      ${e.notes && e.notes['day-all'] ? `<p class="small" style="margin:8px 0 0">“${esc(e.notes['day-all'])}”</p>` : ''}
       <button class="btn sm m-light" style="margin-top:12px" data-act="mood-day" data-d="${day}">Edit check-in</button>`
     : `<h2>How was ${label}?</h2></div>
-      <div class="m-steps">${CARDS.map(([, l], i) => `<span>${i + 1}. ${l}</span>`).join('')}</div>
-      <button class="btn big m-light" style="margin-top:12px" data-act="mood-day" data-d="${day}">Start check-in</button>
-      <div class="small" style="opacity:.8;margin-top:8px;text-align:center">Skip any card that doesn’t apply</div>`}
+      <div class="mpick">${[1, 2, 3, 4, 5].map((i) => `<button data-act="mood-day" data-d="${day}" data-m="${i}" aria-label="${MOOD_NAMES[i]}">${moodFace(i, 40)}<span>${MOOD_NAMES[i]}</span></button>`).join('')}</div>
+      <div class="small" style="opacity:.85;margin-top:10px">Rate your day, then add sleep, cycle, people &amp; more if you like.</div>`}
     </section>`;
 }
 
@@ -2478,12 +2486,14 @@ views.mood = () => {
 };
 
 /** The check-in: six cards, one at a time. Each has its own note and can be skipped. */
-function moodModal(day) {
+function moodModal(day, preset) {
   const prev = db.moods[day];
   const e = prev ? clone(prev) : {};
   ['sleepTags', 'pmsTags', 'move', 'tags', 'feel'].forEach((k) => { if (!Array.isArray(e[k])) e[k] = []; });
-  if (!e.notes) e.notes = e.note ? { mood: e.note } : {};
+  if (!e.notes) e.notes = e.note ? { feel: e.note } : {};
+  if (e.notes.mood) { e.notes.feel = e.notes.mood; delete e.notes.mood; }
   delete e.note;
+  if (preset) e.mood = preset;
   const cyc = cycleInfo();
   if (!prev) { // suggestions from what Gym Log already knows
     const y = db.moods[addDays(day, -1)];
@@ -2494,16 +2504,14 @@ function moodModal(day) {
     });
     if (e.move.length) e.out = true;
   }
-  let step = 0;
-  // Skip = leave this card as it was before the check-in opened (drops suggestions on a new day)
-  const orig = prev ? clone(e) : { sleepTags: [], pmsTags: [], move: [], tags: [], feel: [], notes: {} };
-  const CARD_FIELDS = { sleep: ['sleep', 'bed', 'wake', 'sleepScore', 'sleepTags'], cycle: ['period', 'pms', 'pmsTags'], move: ['out', 'outTime', 'move'], people: ['social'], day: [], mood: ['mood', 'feel'] };
+  let step = -1; // -1 = overview (rate the day + pick a section)
+  const CARD_FIELDS = { sleep: ['sleep', 'bed', 'wake', 'sleepScore', 'sleepTags'], cycle: ['period', 'pms', 'pmsTags'], move: ['out', 'outTime', 'move'], people: ['social'], day: [], feel: ['feel'] };
   const CARD_TAGS = { move: ['out'], people: ['people'], day: ['day', 'food', 'body'] };
   const groupList = (g) => (g === 'out' ? OUT_TAGS : g === 'people' ? PEOPLE_TAGS : g === 'day' ? DAY_TAGS[0][1] : g === 'food' ? DAY_TAGS[1][1] : DAY_TAGS[2][1]).concat(customTags(g));
-  const resetCard = (key) => {
-    CARD_FIELDS[key].forEach((f) => { e[f] = orig[f] === undefined ? (Array.isArray(e[f]) ? [] : null) : clone(orig[f]); });
-    (CARD_TAGS[key] || []).forEach((g) => { const l = groupList(g); e.tags = e.tags.filter((t) => !l.includes(t)).concat((orig.tags || []).filter((t) => l.includes(t))); });
-    if (orig.notes && orig.notes[key]) e.notes[key] = orig.notes[key]; else delete e.notes[key];
+  const clearCard = (key) => {
+    CARD_FIELDS[key].forEach((f) => { e[f] = Array.isArray(e[f]) ? [] : null; });
+    (CARD_TAGS[key] || []).forEach((g) => { const l = groupList(g); e.tags = e.tags.filter((t) => !l.includes(t)); });
+    delete e.notes[key];
   };
   const one = (k, v, label) => `<button class="fchip" data-act="m:one" data-k="${k}" data-v="${v}" aria-pressed="${e[k] === v}">${label}</button>`;
   const chips = (key, list, sm = true) => list.map((t) => `<button class="fchip${sm ? ' sm' : ''}" data-act="m:tag" data-key="${key}" data-t="${esc(t)}" aria-pressed="${e[key].includes(t)}">${esc(t)}</button>`).join('');
@@ -2548,25 +2556,44 @@ function moodModal(day) {
       <div class="mq"><b>Social interaction</b><div class="fchips" data-group="social">${Object.entries(SOCIAL).map(([k, l]) => one('social', k, l)).join('')}</div></div>
       ${tagGroup('Who / what happened', 'tags', PEOPLE_TAGS, 'people')}${noteBox('people')}`,
     day: () => `<h3>Your day</h3>${DAY_TAGS.map(([g, list]) => tagGroup(g, 'tags', list, g === 'Doing' ? 'day' : g === 'Body' ? 'body' : 'food')).join('')}${noteBox('day')}`,
-    mood: () => `<h3>Overall, how was ${moodDayLabel(day)}?</h3>
-      <div class="mpick in-sheet">${[1, 2, 3, 4, 5].map((i) => `<button data-act="m:one" data-k="mood" data-v="${i}" aria-pressed="${e.mood === i}" aria-label="${MOOD_NAMES[i]}">${moodFace(i, 42)}<span>${MOOD_NAMES[i]}</span></button>`).join('')}</div>
-      ${tagGroup('Feelings', 'feel', FEEL_TAGS, 'feel')}${noteBox('mood')}`,
+    feel: () => `<h3>Feelings</h3><p class="small muted">How did you feel during the day?</p>${tagGroup('Feelings', 'feel', FEEL_TAGS, 'feel')}${noteBox('feel')}`,
   };
   const has = {
     sleep: () => e.sleep != null || e.sleepScore != null || e.bed || e.sleepTags.length, cycle: () => e.period != null || e.pms != null || e.pmsTags.length,
     move: () => e.out != null || e.outTime != null || e.move.length, people: () => e.social != null || PEOPLE_TAGS.some((t) => e.tags.includes(t)),
-    day: () => DAY_TAGS.some(([, l]) => l.some((t) => e.tags.includes(t))), mood: () => !!e.mood,
+    day: () => DAY_TAGS.some(([, l]) => l.some((t) => e.tags.includes(t))), feel: () => e.feel.length > 0,
   };
+  const groupTags = (key) => (CARD_TAGS[key] || []).flatMap((g) => e.tags.filter((t) => groupList(g).includes(t)));
+  const summary = {
+    sleep: () => [e.sleep != null && `${e.sleep} h`, e.sleepScore != null && `${e.sleepScore}/10`, e.bed && `bed ${fmtTime(e.bed)}`, ...e.sleepTags],
+    cycle: () => [e.period != null && (e.period ? `${FLOW[e.period]} flow` : 'No period'), e.pms ? `${PMS_LEVEL[e.pms]} PMS` : '', ...e.pmsTags],
+    move: () => [e.out === true ? 'Went out' : e.out === false ? 'Stayed in' : '', e.outTime != null && OUT_TIME[e.outTime], ...e.move, ...groupTags('move')],
+    people: () => [e.social && SOCIAL[e.social], ...groupTags('people')],
+    day: () => groupTags('day'), feel: () => e.feel,
+  };
+  const overview = () => `<div class="row mw-top"><div class="eyebrow grow">${fmtDate(parseDay(day), true)}</div><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
+    <h3>How was ${moodDayLabel(day)}?</h3>
+    <div class="mpick in-sheet">${[1, 2, 3, 4, 5].map((i) => `<button data-act="m:one" data-k="mood" data-v="${i}" aria-pressed="${e.mood === i}" aria-label="${MOOD_NAMES[i]}">${moodFace(i, 42)}<span>${MOOD_NAMES[i]}</span></button>`).join('')}</div>
+    <div class="mq"><b>Add details</b><p class="small muted" style="margin:2px 0 8px">Tap only what you want to log.</p>
+    <div class="mcats">${CARDS.map(([k, l], i) => {
+      const bits = summary[k]().filter(Boolean), note = e.notes[k];
+      return `<button class="mcat c-${k}${bits.length || note ? ' done' : ''}" data-act="m:goto" data-i="${i}">
+        <span class="mcat-i"><svg viewBox="0 0 24 24">${CARD_ICON[k]}</svg></span>
+        <span class="grow"><b>${l}</b><small>${bits.length || note ? esc([...bits, note ? '✎ note' : ''].filter(Boolean).join(' · ')) : 'Tap to add'}</small></span>
+        <span class="mcat-r">${bits.length || note ? ICON.check : ICON.chev}</span></button>`;
+    }).join('')}</div></div>
+    <div class="mq"><b>Note about the day</b><textarea class="field" data-note="day-all" rows="2" placeholder="Anything on your mind? (optional)">${esc(e.notes['day-all'] || '')}</textarea></div>
+    <div class="actions mw-nav">${prev ? '<button class="btn danger" data-act="m:del">Delete</button>' : '<button class="btn" data-act="m:close">Cancel</button>'}
+      <button class="btn primary" data-act="m:save">Save check-in</button></div>`;
   const draw = () => {
-    const [key] = CARDS[step], last = step === CARDS.length - 1;
     const sheet = $('#modal .sheet');
-    sheet.innerHTML = `<div class="row mw-top"><div class="mdots grow">${CARDS.map(([k, l], i) => `<button class="${i === step ? 'on' : ''}${has[k]() ? ' done' : ''}" data-act="m:goto" data-i="${i}" aria-label="${l}"></button>`).join('')}</div>
-        <span class="small muted">${step + 1} / ${CARDS.length}</span><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
-      <div class="eyebrow">${fmtDate(parseDay(day), true)} · ${CARDS[step][1]}</div>
+    if (step < 0) { sheet.innerHTML = overview(); sheet.scrollTop = 0; return; }
+    const [key, label] = CARDS[step];
+    sheet.innerHTML = `<div class="row mw-top"><button class="btn sm soft mw-back" data-act="m:home"><span style="display:inline-flex;transform:scaleX(-1)">${ICON.chev}</span> All</button>
+        <div class="eyebrow grow" style="text-align:center">${label}</div><button class="icon-btn" data-act="m:close" aria-label="Close">${ICON.close}</button></div>
       ${body[key]()}
-      <div class="actions mw-nav">${step ? '<button class="btn" data-act="m:bk">Back</button>' : (prev ? '<button class="btn danger" data-act="m:del">Delete</button>' : '')}
-        <span class="grow"></span>${last ? '' : '<button class="btn ghost" data-act="m:skip">Skip</button>'}
-        <button class="btn primary" data-act="${last ? 'm:save' : 'm:fwd'}">${last ? 'Save check-in' : 'Next'}</button></div>`;
+      <div class="actions mw-nav">${has[key]() || e.notes[key] ? '<button class="btn ghost" data-act="m:clear">Clear</button>' : ''}
+        <button class="btn primary" data-act="m:home">Done</button></div>`;
     sheet.scrollTop = 0;
   };
   const autoSleep = () => {
@@ -2578,9 +2605,8 @@ function moodModal(day) {
   openModal('', {
     close: closeModal,
     goto: (el) => { step = +el.dataset.i; draw(); },
-    fwd: () => { step += 1; draw(); },
-    skip: () => { resetCard(CARDS[step][0]); step += 1; draw(); },
-    bk: () => { step -= 1; draw(); },
+    home: () => { step = -1; draw(); },
+    clear: () => { clearCard(CARDS[step][0]); draw(); },
     one: (el) => {
       const k = el.dataset.k, raw = el.dataset.v, v = raw === 'true' ? true : raw === 'false' ? false : /^\d+$/.test(raw) ? +raw : raw;
       e[k] = e[k] === v && k !== 'mood' ? null : v; // tap again to clear
@@ -2608,7 +2634,7 @@ function moodModal(day) {
     },
     save: () => {
       Object.keys(e.notes).forEach((k) => { if (!e.notes[k]) delete e.notes[k]; });
-      const empty = !Object.keys(has).some((k) => has[k]()) && !Object.keys(e.notes).length;
+      const empty = !e.mood && !Object.keys(has).some((k) => has[k]()) && !Object.keys(e.notes).length;
       if (empty) { toast('Nothing filled in yet'); return; }
       e.at = localISO(); db.moods[day] = e; save(); closeModal();
       toast(!e.mood ? 'Check-in saved' : e.mood >= 4 ? 'Saved — glad it was a good one' : e.mood <= 2 ? 'Saved — tomorrow’s a fresh start' : 'Check-in saved');
@@ -2882,7 +2908,7 @@ document.addEventListener('click', async (ev) => {
     case 'quick-add': quickAdd(); break;
     case 'buddy-tap': buddyPoke(t); break;
     case 'pt-log': ptLogModal(); break;
-    case 'mood-day': moodModal(t.dataset.d); break;
+    case 'mood-day': moodModal(t.dataset.d, t.dataset.m ? +t.dataset.m : 0); break;
     case 'mood-month': ui.moodMonth = Math.min(0, (ui.moodMonth || 0) + +t.dataset.d); renderView(); break;
     case 'mood-ics': moodIcs(); break;
     case 'mood-tag-del': db.moodTags.splice(+t.dataset.i, 1); save(); renderView(); break;

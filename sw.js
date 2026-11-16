@@ -1,5 +1,5 @@
 // Bump VERSION whenever you change any app file so devices pick up the update.
-const VERSION = 'gymlog-v59';
+const VERSION = 'gymlog-v60';
 const VENDOR = 'gymlog-vendor-1';
 const ASSETS = [
   './', './index.html', './styles.css', './app.js', './seed.js', './guides.js', './anim.js', './art.js', './manifest.webmanifest',
@@ -22,6 +22,7 @@ const ASSETS = [
   './mascot/punching-bag.webp',
   './mascot/sleeping-still.webp',
   './mascot/sleeping.webp',
+  './mascot/sleeping-zzz.webp',
   './mascot/treadmill-run-still.webp',
   './mascot/treadmill-run.webp',
   './mascot/water-break-still.webp',

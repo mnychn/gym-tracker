@@ -2737,7 +2737,7 @@ function moodHero() {
     e.social ? SOCIAL[e.social] : '', ...(e.tags || []), ...(e.feel || []),
   ].filter(Boolean) : [];
   return `<section class="card m-hero${pose === 'nap' ? ' nap' : ''}">
-    <div class="m-buddy">${ART.buddy({ m: .4, j: .3, pose, size: pose === 'nap' ? 180 : 120 })}</div>
+    <div class="m-buddy">${ART.buddy({ m: .4, j: .3, pose, size: pose === 'nap' ? 180 : 120 }).replace('mascot/sleeping.webp', 'mascot/sleeping-zzz.webp')}</div>
     <div class="m-head"><div class="eyebrow">Nightly check-in</div>
     ${e ? `<div class="row" style="gap:10px;margin:2px 0 8px">${e.mood ? moodFace(e.mood, 44) : ''}<h2 style="margin:0">${e.mood ? `${MOOD_NAMES[e.mood]} ${label}` : `Logged ${label}`}</h2></div></div>
       <div class="mchips">${chips.slice(0, 10).map((c) => `<span>${esc(c)}</span>`).join('')}${chips.length > 10 ? `<span>+${chips.length - 10}</span>` : ''}</div>

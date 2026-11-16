@@ -1399,7 +1399,7 @@ function nextPose(list) {
 }
 const POSE_SAY = {
   press: 'Overhead press — up, up, UP!', curl: 'Curl, squeeze, repeat…', row: 'Row, row, row that cable!', boxing: 'Jab, jab — POW!',
-  bench: 'Bench day! Spot me?', legpress: 'Leg press… feel the burn!', treadmill: 'Treadmill time — puff puff!', jumprope: 'Skip, skip, skip!',
+  bench: 'Bench day! Spot me?', legpress: 'Leg press… feel the burn!', treadmill: 'Running — puff puff!', jumprope: 'Skip, skip, skip!',
 };
 /** Speech lines that match what Buddy is doing in the picture. */
 function buddyLines(b, pose) {
@@ -2417,8 +2417,8 @@ function moodHero() {
     e.out === true ? 'Left the house' : e.out === false ? 'Stayed in' : '', ...(e.move || []),
     e.social ? SOCIAL[e.social] : '', ...(e.tags || []), ...(e.feel || []),
   ].filter(Boolean) : [];
-  return `<section class="card m-hero">
-    <div class="m-buddy">${ART.buddy({ m: .4, j: .3, pose, size: 120 })}</div>
+  return `<section class="card m-hero${pose === 'nap' ? ' nap' : ''}">
+    <div class="m-buddy">${ART.buddy({ m: .4, j: .3, pose, size: pose === 'nap' ? 180 : 120 })}</div>
     <div class="m-head"><div class="eyebrow">Nightly check-in</div>
     ${e ? `<div class="row" style="gap:10px;margin:2px 0 8px">${e.mood ? moodFace(e.mood, 44) : ''}<h2 style="margin:0">${e.mood ? `${MOOD_NAMES[e.mood]} ${label}` : `Logged ${label}`}</h2></div></div>
       <div class="mchips">${chips.slice(0, 10).map((c) => `<span>${esc(c)}</span>`).join('')}${chips.length > 10 ? `<span>+${chips.length - 10}</span>` : ''}</div>

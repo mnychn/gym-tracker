@@ -1281,3 +1281,6 @@ h1 { font-weight: 800; letter-spacing: -.01em; }
 .mw-back { gap: 2px; padding: 0 12px 0 6px; }
 .mw-back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; }
 img.buddy { -webkit-user-select: none; user-select: none; -webkit-user-drag: none; -webkit-touch-callout: none; object-fit: contain; }
+.m-hero.nap .m-buddy { width: 180px; top: -74px; right: -12px; }
+.m-hero.nap .m-buddy .buddy { width: 180px; }
+.m-hero.nap .m-head { padding-right: 140px; }

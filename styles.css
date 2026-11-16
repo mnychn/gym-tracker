@@ -1069,3 +1069,100 @@ body { background: var(--grain), var(--bg); background-attachment: fixed; }
 :root[data-theme="dark"] .hero .btn.primary { background: #f2b63c; color: #1d2b4a; }
 :root[data-theme="dark"] .b-hero { background: var(--grain), radial-gradient(120% 140% at 0% 0%, #1f6766 0%, #1d3557 55%, #131c31 100%); box-shadow: none; }
 .q-hero .pill { background: rgba(251,245,232,.85); color: #1d2b4a; border: 1.5px solid #1d2b4a; }
+
+/* =====================  Theme v4 — flat poster (teal · red-orange · yellow · black · cream), thick outlines, hard shadows, print speckle  ===================== */
+:root {
+  --bg: #f2e8d5; --surface: #fbf6ea; --surface-2: #efe3c9; --line: rgba(27,31,43,.18);
+  --text: #1b1f2b; --text-2: #4a4e5a; --text-3: #8a877f;
+  --accent: #e8553a; --accent-ink: #fff8ec; --accent-soft: #f9d3c6;
+  --lav: #1f9a8f; --lav-soft: #c7e7e0; --peach: #f6c53c; --peach-2: #e8553a; --peach-soft: #fbe9ad;
+  --mint-soft: #d5e8c7; --sky-soft: #cfe1ea; --ink: #1b1f2b; --ok-ink: #2c7a3d;
+  --edge: #1b1f2b; --retro-line: 2.5px solid var(--edge); --hard: 4px 4px 0 var(--edge);
+  --speck: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='%231b1f2b' fill-opacity='.10'%3E%3Ccircle cx='12' cy='18' r='1'/%3E%3Ccircle cx='70' cy='9' r='.8'/%3E%3Ccircle cx='101' cy='40' r='1.2'/%3E%3Ccircle cx='33' cy='66' r='.7'/%3E%3Ccircle cx='88' cy='83' r='1'/%3E%3Ccircle cx='15' cy='104' r='.9'/%3E%3Ccircle cx='57' cy='112' r='1.1'/%3E%3Ccircle cx='110' cy='110' r='.7'/%3E%3Ccircle cx='48' cy='35' r='.6'/%3E%3C/g%3E%3C/svg%3E");
+  --shadow: var(--hard);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141a28; --surface: #1e2638; --surface-2: #283249; --line: rgba(246,239,224,.14);
+    --text: #f6efe0; --text-2: #cfc6b2; --text-3: #8f8c86;
+    --accent: #f06a4c; --accent-ink: #141a28; --accent-soft: #432a26;
+    --lav: #2fb5a8; --lav-soft: #173f3d; --peach-soft: #3f361c; --mint-soft: #22381f; --sky-soft: #1c3145; --ink: #f6efe0; --ok-ink: #8ed39c;
+    --edge: #05070c; --shadow: var(--hard);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141a28; --surface: #1e2638; --surface-2: #283249; --line: rgba(246,239,224,.14);
+  --text: #f6efe0; --text-2: #cfc6b2; --text-3: #8f8c86;
+  --accent: #f06a4c; --accent-ink: #141a28; --accent-soft: #432a26;
+  --lav: #2fb5a8; --lav-soft: #173f3d; --peach-soft: #3f361c; --mint-soft: #22381f; --sky-soft: #1c3145; --ink: #f6efe0; --ok-ink: #8ed39c;
+  --edge: #05070c; --shadow: var(--hard);
+}
+body { background: var(--speck), var(--grain), var(--bg); }
+h1, .hero h2, .b-msg, .q-score b, .title { font-weight: 700; letter-spacing: -.02em; }
+/* flat poster cards: thick black outline + hard offset shadow */
+.card, .dpill, .date-chip, .bcard, .tile, .qa, .wk-s, .stat, .bd-bubble { border: var(--retro-line); box-shadow: var(--hard); }
+.card.flush, .sheet .card { box-shadow: none; }
+.tile, .wk-s, .qa, .stat { box-shadow: 3px 3px 0 var(--edge); }
+.btn { border: 2.5px solid var(--edge); font-weight: 600; }
+.btn.ghost, .icon-btn { border-color: transparent; }
+.btn.primary { box-shadow: 3px 3px 0 var(--edge); }
+.btn.primary:active, .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--edge); }
+.btn.soft { background: var(--lav-soft); color: var(--text); }
+.pill { border: 2px solid var(--edge); background: var(--surface); }
+.seg { border: 2.5px solid var(--edge); background: var(--surface); }
+.seg button.on { background: var(--edge); color: var(--bg); }
+.field { border: 2px solid var(--edge) !important; background: var(--surface); }
+.fchip { border: 2.5px solid var(--edge); background: var(--surface); }
+.fchip[aria-pressed="true"] { background: var(--lav); border-color: var(--edge); color: #fff; box-shadow: 2px 2px 0 var(--edge); }
+.sheet { border: 3px solid var(--edge); border-bottom: 0; background: var(--speck), var(--bg); }
+.tabs { border-top: 3px solid var(--edge); background: var(--surface); }
+.tabs button.on { color: var(--text); }
+.tabs button.on svg { background: var(--peach); color: var(--edge); box-shadow: inset 0 0 0 2.5px var(--edge); }
+.fab { background: var(--accent); color: #fff; border: 3px solid var(--edge); box-shadow: var(--hard); }
+.dpill.today { background: var(--accent); }
+.dpill.done .dp-i { box-shadow: none; border: 2px solid var(--edge); }
+.qa.lav { background: #c7e7e0; } .qa.peach { background: #fbe9ad; } .qa.mint { background: #f9d3c6; } .qa.sky { background: #cfe1ea; }
+.tile-lav { background: #c7e7e0; } .tile-peach { background: #fbe9ad; }
+:root[data-theme="dark"] .tile-lav, :root[data-theme="dark"] .tile-peach, :root[data-theme="dark"] .qa { color: #1b1f2b; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tile-lav, :root:not([data-theme="light"]) .tile-peach, :root:not([data-theme="light"]) .qa { color: #1b1f2b; } }
+.quest .slot { border: 2px dashed var(--edge); } .quest .slot.done { background: var(--edge); color: var(--peach); border-style: solid; }
+
+/* weekly quest: flat yellow poster with a red sun and black waves */
+.q-hero { background: var(--speck), #f6c53c !important; color: #1b1f2b !important; overflow: hidden; border-bottom: 3px solid #1b1f2b; }
+.q-hero::before { content: ""; position: absolute; right: -36px; top: -40px; width: 150px; height: 150px; border-radius: 50%; background: #e8553a; border: 3px solid #1b1f2b; }
+.q-hero::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 16px;
+  background: repeating-linear-gradient(90deg, #1b1f2b 0 14px, transparent 14px 28px); opacity: .9; }
+.q-hero > * { position: relative; z-index: 1; }
+.q-hero .small.muted, .q-hero .q-lvtxt { color: #1b1f2b !important; opacity: .85; }
+.q-hero .pill { background: #fbf6ea; color: #1b1f2b; border: 2px solid #1b1f2b; }
+.q-lv { background: #fbf6ea; border: 2px solid #1b1f2b; } .q-lv span { background: #1f9a8f; }
+.q-lvtxt { margin-bottom: 12px; }
+.q-buddy .bd-bubble { background: #fbf6ea; color: #1b1f2b; border: 2.5px solid #1b1f2b; box-shadow: 3px 3px 0 #1b1f2b; }
+.q-buddy .bd-bubble::before { border-right-color: #1b1f2b; left: -10px; }
+.q-buddy .bd-pips i { background: #fbf6ea; border: 2px solid #1b1f2b; } .q-buddy .bd-pips i.on { background: #1f9a8f; } .q-buddy .bd-pips.peach i.on, .bd-pips.peach i.on { background: #e8553a; }
+.road { background: #fbf6ea; border: 2px solid #1b1f2b; } .road-fill { background: #e8553a !important; }
+
+/* up next: flat teal block with a cream half-sun */
+.hero { background: var(--speck), #1f9a8f !important; color: #fbf6ea; overflow: hidden; box-shadow: var(--hard); }
+.hero::before { content: ""; position: absolute; right: -50px; bottom: -70px; width: 200px; height: 200px; border-radius: 50%; background: #f6c53c; border: 3px solid #1b1f2b; }
+.hero > * { position: relative; z-index: 1; }
+.hero h2, .hero li { color: #fbf6ea !important; } .hero .eyebrow { color: #f6c53c !important; }
+.hero .small.muted, .hero li span:last-child, .hero p.small.muted { color: #dff2ee !important; }
+.hero .btn.primary { background: #e8553a !important; color: #fff !important; }
+
+/* body: night city — navy block, yellow moon, black skyline */
+.b-hero { background: var(--speck), #22406b !important; color: #fbf6ea; box-shadow: var(--hard); border: var(--retro-line); }
+.b-hero::after { right: 18px; top: 16px; bottom: auto; width: 54px; height: 54px; background: #f6c53c; border: 3px solid #1b1f2b; }
+.b-hero::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: #1b1f2b;
+  clip-path: polygon(0 60%, 8% 60%, 8% 20%, 16% 20%, 16% 45%, 24% 45%, 24% 0, 32% 0, 32% 50%, 44% 50%, 44% 25%, 52% 25%, 52% 60%, 64% 60%, 64% 10%, 70% 10%, 70% 40%, 80% 40%, 80% 15%, 90% 15%, 90% 55%, 100% 55%, 100% 100%, 0 100%); }
+.b-hero .buddy { position: relative; z-index: 1; }
+.b-c { border: 2px solid #1b1f2b; }
+.fuel { background: var(--speck), #fbe9ad !important; color: #1b1f2b; }
+.bcard.lav { background: #c7e7e0; } .bcard.peach { background: #fbe9ad; } .bcard.mint { background: #f9d3c6; }
+:root[data-theme="dark"] .bcard.lav, :root[data-theme="dark"] .bcard.peach, :root[data-theme="dark"] .bcard.mint { background: var(--surface); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bcard.lav, :root:not([data-theme="light"]) .bcard.peach, :root:not([data-theme="light"]) .bcard.mint { background: var(--surface); } }
+.surprise .sp-card { border: 3px solid #1b1f2b; box-shadow: 6px 6px 0 #1b1f2b; background: var(--speck), #fbf6ea; color: #1b1f2b; }
+.wk-head { background: #fbe9ad; color: #1b1f2b; border: 2.5px solid var(--edge); }
+.q-hero .q-score, .q-hero .q-score b, .q-hero b { color: #1b1f2b !important; }
+.q-hero .q-medal.none { background: #fbf6ea; border: 2px dashed #1b1f2b; }
+.quest .slot { background: rgba(251,246,234,.6); color: #1b1f2b; }
